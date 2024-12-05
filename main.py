@@ -13,6 +13,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from config import OPENAI_API_KEY, YOUTUBE_API_KEY, CHANNEL_ID
 from langchain.schema import HumanMessage
+import concurrent.futures
 
 # API keys
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
@@ -35,10 +36,11 @@ def get_latest_video_ids(channel_id, num_videos):
     return [item["id"]["videoId"] for item in response.get("items", [])]
 
 
-# Step 2: Download Transcripts
+# Step 2: Download Transcripts with Multithreading
 def download_transcripts(video_ids, output_folder="transcripts"):
     os.makedirs(output_folder, exist_ok=True)
-    for video_id in video_ids:
+
+    def download_video(video_id):
         video_url = f"https://www.youtube.com/watch?v={video_id}"
         output_file = os.path.join(output_folder, f"{video_id}.vtt")
         try:
@@ -56,6 +58,10 @@ def download_transcripts(video_ids, output_folder="transcripts"):
             print(f"Transcript downloaded: {output_file}")
         except subprocess.CalledProcessError:
             print(f"Error downloading transcript for {video_id}")
+
+    # Use ThreadPoolExecutor to download transcripts in parallel
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        executor.map(download_video, video_ids)
 
 
 # Step 3: Reformat Transcripts
@@ -193,15 +199,13 @@ def query_knowledge_base(index, metadata, query):
     except ValueError as e:
         print(f"Error during similarity search: {e}")
 
-
-from langchain.schema import HumanMessage
-
 def query_and_analyze_knowledge_base(index, metadata, query):
     embedding_model = OpenAIEmbeddings()
     docstore = InMemoryDocstore({
         str(i): Document(
             page_content=entry["text"],
-            metadata={"video_id": entry["metadata"]["video_id"]} if "metadata" in entry and "video_id" in entry["metadata"] else {}
+            metadata={"video_id": entry["metadata"]["video_id"]} if "metadata" in entry and "video_id" in entry[
+                "metadata"] else {}
         )
         for i, entry in enumerate(metadata)
     })
@@ -254,6 +258,8 @@ def query_and_analyze_knowledge_base(index, metadata, query):
     except ValueError as e:
         print(f"Error during similarity search: {e}")
 
+
+# Use the new multithreaded function in the main workflow
 def main():
     index, metadata = load_knowledge_base()
     if index is None:
@@ -261,8 +267,8 @@ def main():
         metadata = []
 
     channel_id = CHANNEL_ID
-    video_ids = get_latest_video_ids(channel_id, 5)
-    download_transcripts(video_ids)
+    video_ids = get_latest_video_ids(channel_id, 10)
+    download_transcripts(video_ids)  # Updated function
     reformat_transcripts("transcripts", "transcripts_formatted")
     chunks = chunkify_transcripts("transcripts_formatted")
 
@@ -276,11 +282,8 @@ def main():
 if __name__ == "__main__":
     main()
 
-#todo:
-# download all content from channel
+# todo:
 # add fastapi to create an api to jut run the query knowledge base function
 # either streamlit or gradio for a UI
 # clean up code a bit to modularize it
 # host it, take screenshots and post it on github and X
-
-
