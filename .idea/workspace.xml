@@ -6,21 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="c9e5078d-ac6d-41b7-ba45-8332140333d1" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/faiss_index.bin" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/metadata.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts/M-cXXtt81Zc.vtt.en.vtt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts/MPMpty8e5RU.vtt.en.vtt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts/MkEZXp0GJe8.vtt.en.vtt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts/cv6vO-pVwUk.vtt.en.vtt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts/nLt13WTzB0g.vtt.en.vtt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts/sowl3uFfDzc.vtt.en.vtt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts_formatted/M-cXXtt81Zc_formatted.txt.en_formatted.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts_formatted/MPMpty8e5RU_formatted.txt.en_formatted.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts_formatted/MkEZXp0GJe8_formatted.txt.en_formatted.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts_formatted/cv6vO-pVwUk_formatted.txt.en_formatted.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts_formatted/nLt13WTzB0g_formatted.txt.en_formatted.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/transcripts_formatted/sowl3uFfDzc_formatted.txt.en_formatted.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/faiss_index.bin" beforeDir="false" afterPath="$PROJECT_DIR$/faiss_index.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/metadata.json" beforeDir="false" afterPath="$PROJECT_DIR$/metadata.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

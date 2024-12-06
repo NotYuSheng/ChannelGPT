@@ -245,7 +245,7 @@ def query_and_analyze_knowledge_base(index, metadata, query):
 
             Question: {query}
 
-            Provide a detailed analysis, identifying contradictions, agreements, or supporting statements. Include the YouTube links where relevant information is found.
+            Provide a detailed analysis in the form of a list, where each point starts on a new line. Clearly identify contradictions, agreements, or supporting statements. Include the YouTube links and timestamps where relevant information is found. Use structured formatting for clarity.
             """)
         ]
 
