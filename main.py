@@ -14,6 +14,9 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 from config import OPENAI_API_KEY, YOUTUBE_API_KEY, CHANNEL_ID
 from langchain.schema import HumanMessage
 import concurrent.futures
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import Optional
 
 # API keys
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
@@ -279,11 +282,45 @@ def main():
     query_and_analyze_knowledge_base(index, metadata, query)
 
 
+# Initialize FastAPI app
+app = FastAPI(title="PiersGPT API")
+
+class Query(BaseModel):
+    text: str
+
+@app.post("/query")
+async def query_endpoint(query: Query):
+    try:
+        # Load the knowledge base
+        index, metadata = load_knowledge_base()
+        if index is None:
+            raise HTTPException(status_code=404, detail="Knowledge base not found")
+        
+        # Run the query and capture the output
+        from io import StringIO
+        import sys
+        
+        # Redirect stdout to capture the print output
+        old_stdout = sys.stdout
+        result = StringIO()
+        sys.stdout = result
+        
+        # Run the query
+        query_and_analyze_knowledge_base(index, metadata, query.text)
+        
+        # Restore stdout and get the captured output
+        sys.stdout = old_stdout
+        response = result.getvalue()
+        
+        return {"analysis": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     main()
 
 # todo:
-# add fastapi to create an api to jut run the query knowledge base function
+# add fastapi to create an api to just run the query knowledge base function
 # either streamlit or gradio for a UI
 # clean up code a bit to modularize it
 # host it, take screenshots and post it on github and X
