@@ -14,7 +14,7 @@ from langchain_community.docstore.in_memory import InMemoryDocstore
 from config import OPENAI_API_KEY, YOUTUBE_API_KEY, CHANNEL_ID
 from langchain.schema import HumanMessage
 import concurrent.futures
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel
 from typing import Optional
 
@@ -28,15 +28,28 @@ METADATA_PATH = "metadata.json"
 
 # Step 1: Fetch Latest Video IDs
 def get_latest_video_ids(channel_id, num_videos):
-    youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-    response = youtube.search().list(
-        part="id",
-        channelId=channel_id,
-        order="date",
-        maxResults=num_videos,
-        type="video"
-    ).execute()
-    return [item["id"]["videoId"] for item in response.get("items", [])]
+    try:
+        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        response = youtube.search().list(
+            part="id",
+            channelId=channel_id,
+            order="date",
+            maxResults=num_videos,
+            type="video"
+        ).execute()
+        
+        if not response.get("items"):
+            print(f"Warning: No videos found for channel ID {channel_id}")
+            return []
+            
+        return [item["id"]["videoId"] for item in response.get("items", [])]
+    except Exception as e:
+        print(f"Error with YouTube API: {str(e)}")
+        if "quota" in str(e).lower():
+            print("YouTube API quota exceeded. Please check your quota limits.")
+        elif "invalid" in str(e).lower():
+            print("Invalid YouTube API key. Please check your API key configuration.")
+        raise HTTPException(status_code=500, detail=f"YouTube API error: {str(e)}")
 
 
 # Step 2: Download Transcripts with Multithreading
@@ -287,40 +300,57 @@ app = FastAPI(title="PiersGPT API")
 
 class Query(BaseModel):
     text: str
+    channel_id: Optional[str] = None
 
 @app.post("/query")
-async def query_endpoint(query: Query):
+async def query_endpoint(query: Query = Body(...)):
     try:
-        # Load the knowledge base
+        if not query.text:
+            raise HTTPException(status_code=400, detail="Query text is required")
+
+        # Use the provided channel_id or fallback to CHANNEL_ID
+        channel_id = query.channel_id or CHANNEL_ID
+
+        # Load or create knowledge base for the channel
         index, metadata = load_knowledge_base()
         if index is None:
-            raise HTTPException(status_code=404, detail="Knowledge base not found")
-        
-        # Run the query and capture the output
+            index = faiss.IndexFlatL2(1536)
+            metadata = []
+
+        # Update knowledge base with latest videos
+        video_ids = get_latest_video_ids(channel_id, 10)
+        download_transcripts(video_ids)
+        reformat_transcripts("transcripts", "transcripts_formatted")
+        chunks = chunkify_transcripts("transcripts_formatted")
+
+        index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata)
+        save_knowledge_base(index, metadata)
+
+        # Capture the output from query_and_analyze_knowledge_base
         from io import StringIO
         import sys
-        
-        # Redirect stdout to capture the print output
+
+        # Redirect stdout to capture output
         old_stdout = sys.stdout
         result = StringIO()
         sys.stdout = result
-        
+
         # Run the query
         query_and_analyze_knowledge_base(index, metadata, query.text)
-        
-        # Restore stdout and get the captured output
+
+        # Restore stdout and capture the result
         sys.stdout = old_stdout
         response = result.getvalue()
-        
+
         return {"analysis": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8001)
 
 # todo:
-# add fastapi to create an api to just run the query knowledge base function
-# either streamlit or gradio for a UI
+# convert user id to channel id
 # clean up code a bit to modularize it
 # host it, take screenshots and post it on github and X
