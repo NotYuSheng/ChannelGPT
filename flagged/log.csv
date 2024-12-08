@@ -1,3 +1,0 @@
-Channel ID,Query,Analysis,flag,username,timestamp
-,sdfasdf,"Error with YouTube API: 500: YouTube API error: <HttpError 400 when requesting https://youtube.googleapis.com/youtube/v3/search?part=id&channelId=sdfasf&order=date&maxResults=10&type=video&key=AIzaSyC9peYRYOXZuuSwdwLi8cjXAExOhwlSyE8&alt=json returned ""Request contains an invalid argument."". Details: ""[{'message': 'Request contains an invalid argument.', 'domain': 'global', 'reason': 'badRequest'}]"">
-Please check your YouTube API key configuration.",,,2024-12-08 09:11:23.739900
