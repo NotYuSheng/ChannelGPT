@@ -17,6 +17,7 @@ import concurrent.futures
 from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel
 from typing import Optional
+import uvicorn
 
 # API keys
 os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
@@ -29,20 +30,41 @@ METADATA_PATH = "metadata.json"
 # Step 1: Fetch Latest Video IDs
 def get_latest_video_ids(channel_id, num_videos):
     try:
+        print(f"Attempting to fetch {num_videos} videos for channel ID: {channel_id}")
         youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        
+        # First, verify the channel exists
+        try:
+            channel_response = youtube.channels().list(
+                part="snippet",
+                id=channel_id
+            ).execute()
+            if not channel_response.get("items"):
+                print(f"Warning: Channel ID {channel_id} not found")
+                return []
+            print(f"Channel found: {channel_response['items'][0]['snippet']['title']}")
+        except Exception as e:
+            print(f"Error verifying channel: {str(e)}")
+            return []
+
+        # Now fetch videos
         response = youtube.search().list(
-            part="id",
+            part="id,snippet",
             channelId=channel_id,
             order="date",
             maxResults=num_videos,
             type="video"
         ).execute()
         
-        if not response.get("items"):
+        items = response.get("items", [])
+        if not items:
             print(f"Warning: No videos found for channel ID {channel_id}")
+            print("API Response:", response)
             return []
             
-        return [item["id"]["videoId"] for item in response.get("items", [])]
+        video_ids = [item["id"]["videoId"] for item in items]
+        print(f"Found {len(video_ids)} videos: {video_ids}")
+        return video_ids
     except Exception as e:
         print(f"Error with YouTube API: {str(e)}")
         if "quota" in str(e).lower():
@@ -215,6 +237,7 @@ def query_knowledge_base(index, metadata, query):
     except ValueError as e:
         print(f"Error during similarity search: {e}")
 
+
 def query_and_analyze_knowledge_base(index, metadata, query):
     embedding_model = OpenAIEmbeddings()
     docstore = InMemoryDocstore({
@@ -238,7 +261,7 @@ def query_and_analyze_knowledge_base(index, metadata, query):
         # Retrieve relevant chunks
         retrieved_docs = vectorstore.similarity_search(query, k=10)
 
-        # Generate context with YouTube links
+        # Generate context with YouTube links g
         context_with_links = []
         for doc in retrieved_docs:
             video_id = doc.metadata["video_id"].split(".")[0]
@@ -298,9 +321,32 @@ def main():
 # Initialize FastAPI app
 app = FastAPI(title="PiersGPT API")
 
+
 class Query(BaseModel):
     text: str
     channel_id: Optional[str] = None
+
+
+def verify_channel_id(channel_id):
+    """Verify that a channel ID is valid and accessible"""
+    try:
+        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
+        response = youtube.channels().list(
+            part="snippet",
+            id=channel_id
+        ).execute()
+        
+        if not response.get("items"):
+            print(f"Channel ID {channel_id} not found or not accessible")
+            return False, None
+        
+        channel_title = response["items"][0]["snippet"]["title"]
+        print(f"Successfully verified channel: {channel_title}")
+        return True, channel_title
+    except Exception as e:
+        print(f"Error verifying channel: {str(e)}")
+        return False, None
+
 
 @app.post("/query")
 async def query_endpoint(query: Query = Body(...)):
@@ -310,21 +356,39 @@ async def query_endpoint(query: Query = Body(...)):
 
         # Use the provided channel_id or fallback to CHANNEL_ID
         channel_id = query.channel_id or CHANNEL_ID
+        
+        # Verify channel ID
+        is_valid, channel_title = verify_channel_id(channel_id)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=f"Invalid or inaccessible channel ID: {channel_id}")
+        print(f"Processing query for channel: {channel_title}")
 
-        # Load or create knowledge base for the channel
+        # First, query the knowledge base to see if it exists and has content
         index, metadata = load_knowledge_base()
-        if index is None:
+        if index is None or index.ntotal == 0:
+            print("Knowledge base empty or not found. Building initial knowledge base...")
             index = faiss.IndexFlatL2(1536)
             metadata = []
-
-        # Update knowledge base with latest videos
+            
+        # Always update with latest videos
+        print("Fetching latest videos...")
         video_ids = get_latest_video_ids(channel_id, 10)
-        download_transcripts(video_ids)
-        reformat_transcripts("transcripts", "transcripts_formatted")
-        chunks = chunkify_transcripts("transcripts_formatted")
+        if video_ids:
+            print(f"Found {len(video_ids)} videos. Downloading transcripts...")
+            download_transcripts(video_ids)
+            print("Reformatting transcripts...")
+            reformat_transcripts("transcripts", "transcripts_formatted")
+            print("Creating chunks...")
+            chunks = chunkify_transcripts("transcripts_formatted")
+            
+            print("Updating knowledge base...")
+            index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata)
+            save_knowledge_base(index, metadata)
+        else:
+            print("No new videos found to process.")
 
-        index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata)
-        save_knowledge_base(index, metadata)
+        if index.ntotal == 0:
+            return {"analysis": "No content available in the knowledge base. Please check the channel ID and try again."}
 
         # Capture the output from query_and_analyze_knowledge_base
         from io import StringIO
@@ -336,6 +400,7 @@ async def query_endpoint(query: Query = Body(...)):
         sys.stdout = result
 
         # Run the query
+        print(f"Querying knowledge base with: {query.text}")
         query_and_analyze_knowledge_base(index, metadata, query.text)
 
         # Restore stdout and capture the result
@@ -344,10 +409,11 @@ async def query_endpoint(query: Query = Body(...)):
 
         return {"analysis": response}
     except Exception as e:
+        print(f"Error in query_endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8001)
 
 # todo:

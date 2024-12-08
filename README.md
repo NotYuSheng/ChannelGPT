@@ -36,6 +36,7 @@ pip install -r requirements.txt
      ```python
      OPENAI_API_KEY = "your_openai_api_key"
      YOUTUBE_API_KEY = "your_youtube_api_key"
+     CHANNEL_ID = "UCatt7TBjfBkiJWx8khav_Gg"
      ```
 
 ## Running the Application

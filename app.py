@@ -57,7 +57,7 @@ demo = gr.Interface(
         label="Analysis"
     ),
     title="ChannelGPT - YouTube Content Analysis",
-    description="Analyze any YouTube channel's content using AI. Enter a channel ID and ask questions to get insights from video transcripts.",
+    description="Provide a detailed analysis in the form of a list, where each point starts on a new line. Clearly identify contradictions, agreements, or supporting statements. Include the YouTube links and timestamps where relevant information is found. Use structured formatting for clarity.",
     examples=[
         ["", "What are the main topics discussed in recent videos?"],
         ["", "What are the most controversial opinions expressed?"],
