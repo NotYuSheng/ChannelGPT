@@ -2,6 +2,7 @@
 
 ChannelGPT is an AI-powered content analysis tool that allows users to query and analyze any YouTube channel's content using natural language. The application processes video transcripts and uses advanced language models to provide detailed analysis and insights.
 
+SEE DEMO VIDEO: https://youtu.be/NSxQu9Pn-Cc
 ## Features
 
 - Analyze any YouTube channel by providing its Channel ID
