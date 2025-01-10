@@ -3,75 +3,82 @@ import json
 import subprocess
 import faiss
 import numpy as np
-from googleapiclient.discovery import build
 from langchain_core.documents import Document
 from webvtt import WebVTT
-from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain_openai.chat_models import ChatOpenAI
+from langchain.schema import HumanMessage
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.docstore.in_memory import InMemoryDocstore
-from config import OPENAI_API_KEY, YOUTUBE_API_KEY, CHANNEL_ID
-from langchain.schema import HumanMessage
 import concurrent.futures
 from fastapi import FastAPI, HTTPException, Body
 from pydantic import BaseModel
 from typing import Optional
+import requests
+from sentence_transformers import SentenceTransformer
 import uvicorn
+import re
+import traceback
+import logging
+from langchain_huggingface import HuggingFaceEmbeddings
 
-# API keys
-os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
+# Configure logging to output to stdout
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 # Paths for saving knowledge base
-INDEX_PATH = "faiss_index.bin"
-METADATA_PATH = "metadata.json"
+INDEX_PATH = "/app/data/faiss_index.bin"
+METADATA_PATH = "/app/data/metadata.json"
 
+# # Ensure the directory exists
+# os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
 
-# Step 1: Fetch Latest Video IDs
-def get_latest_video_ids(channel_id, num_videos):
+# # Create index file if it doesn't exist
+# if not os.path.exists(INDEX_PATH):
+#     with open(INDEX_PATH, 'wb') as f:
+#         pass  # Create an empty binary file
+
+# # Create metadata file if it doesn't exist
+# if not os.path.exists(METADATA_PATH):
+#     with open(METADATA_PATH, 'w') as f:
+#         json.dump([], f)  # Create an empty JSON array
+
+#model_name = "sentence-transformers/all-mpnet-base-v2"
+#model = SentenceTransformer('distiluse-base-multilingual-cased-v1')
+#model_name = "BAAI/bge-large-en-v1.5"
+
+# Load embedding model
+model_name = "BAAI/bge-base-en-v1.5"
+model_kwargs = {'device': 'cpu'}
+encode_kwargs = {'normalize_embeddings': False}
+
+embedding_function  = HuggingFaceEmbeddings(
+    model_name=model_name,
+    model_kwargs=model_kwargs,
+    encode_kwargs=encode_kwargs
+)
+
+def verify_channel_url(channel_url):
+    youtube_url_pattern = r"^https://www\.youtube\.com/@[a-zA-Z0-9_-]+(/videos)?$"
+    if not re.match(youtube_url_pattern, channel_url):
+        raise HTTPException(status_code=400, detail="Invalid YouTube channel URL.")
+    print(f"Successfully verified channel URL: {channel_url}")
+    return True
+
+# Step 1: Fetch Latest Video IDs using yt-dlp
+def get_latest_video_ids(channel_url, num_videos=10):
     try:
-        print(f"Attempting to fetch {num_videos} videos for channel ID: {channel_id}")
-        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-        
-        # First, verify the channel exists
-        try:
-            channel_response = youtube.channels().list(
-                part="snippet",
-                id=channel_id
-            ).execute()
-            if not channel_response.get("items"):
-                print(f"Warning: Channel ID {channel_id} not found")
-                return []
-            print(f"Channel found: {channel_response['items'][0]['snippet']['title']}")
-        except Exception as e:
-            print(f"Error verifying channel: {str(e)}")
-            return []
-
-        # Now fetch videos
-        response = youtube.search().list(
-            part="id,snippet",
-            channelId=channel_id,
-            order="date",
-            maxResults=num_videos,
-            type="video"
-        ).execute()
-        
-        items = response.get("items", [])
-        if not items:
-            print(f"Warning: No videos found for channel ID {channel_id}")
-            print("API Response:", response)
-            return []
-            
-        video_ids = [item["id"]["videoId"] for item in items]
+        print(f"Attempting to fetch the latest {num_videos} videos from: {channel_url}")
+        result = subprocess.run(
+            ["yt-dlp", "--flat-playlist", "--get-id", channel_url],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        video_ids = result.stdout.strip().split("\n")[:num_videos]
         print(f"Found {len(video_ids)} videos: {video_ids}")
         return video_ids
-    except Exception as e:
-        print(f"Error with YouTube API: {str(e)}")
-        if "quota" in str(e).lower():
-            print("YouTube API quota exceeded. Please check your quota limits.")
-        elif "invalid" in str(e).lower():
-            print("Invalid YouTube API key. Please check your API key configuration.")
-        raise HTTPException(status_code=500, detail=f"YouTube API error: {str(e)}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error fetching video IDs: {e.stderr}")
+        raise HTTPException(status_code=500, detail="Failed to fetch video IDs from the channel.")
 
 
 # Step 2: Download Transcripts with Multithreading
@@ -97,7 +104,6 @@ def download_transcripts(video_ids, output_folder="transcripts"):
         except subprocess.CalledProcessError:
             print(f"Error downloading transcript for {video_id}")
 
-    # Use ThreadPoolExecutor to download transcripts in parallel
     with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(download_video, video_ids)
 
@@ -117,7 +123,6 @@ def reformat_transcripts(input_folder, output_folder):
 
 # Step 4: Chunkify Transcripts
 def chunkify_transcripts(folder):
-    """Create chunks from transcripts, ensuring the metadata field is included."""
     chunks = []
     for file_name in os.listdir(folder):
         if file_name.endswith("_formatted.txt"):
@@ -147,7 +152,18 @@ def load_knowledge_base():
             metadata = json.load(f)
         print("Knowledge base loaded.")
         return index, metadata
-    return None, []
+    else:
+        # Embed a sample text to check the dimensionality
+        sample_embeddings = embedding_function.embed_documents(["test text"])  # Embed sample text
+        embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
+        print(f"Embedding dimensionality: {embedding_dim}")  # Check the dimensionality
+
+        # Initialize the FAISS index with the correct dimensionality
+        index = faiss.IndexFlatL2(embedding_dim)
+
+        metadata = []
+        print("No existing knowledge base found. Initialized a new one.")
+        return index, metadata
 
 
 def update_knowledge_base(chunks, index, metadata):
@@ -155,197 +171,121 @@ def update_knowledge_base(chunks, index, metadata):
     # Extract existing video IDs from metadata
     existing_ids = {entry["metadata"]["video_id"] for entry in metadata}
 
-    # Filter out chunks with duplicate video IDs
-    new_chunks = [chunk for chunk in chunks if chunk["metadata"]["video_id"] not in existing_ids]
+    # All chunks uses the same video_id, so we just have to ensure this video has not been added before
+    new_chunks = []
+    if len(chunks) > 0:
+        if chunks[0]["metadata"]["video_id"] not in existing_ids:
+            new_chunks = chunks
 
     if new_chunks:
-        # Embed new texts
+        # Embed new texts using Hugging Face embeddings
         texts = [chunk["text"] for chunk in new_chunks]
-        embedding_model = OpenAIEmbeddings()
-        embeddings = np.array(embedding_model.embed_documents(texts))
+        
+        # Generate embeddings for the texts
+        embeddings = np.array(embedding_function.embed_documents(texts))
 
         # Add new embeddings to FAISS index
+        embedding_dim = embeddings.shape[1]  # Get the dimensionality of the embeddings
         if index.ntotal == 0:
-            index = faiss.IndexFlatL2(1536)
+            index = faiss.IndexFlatL2(embedding_dim)  # Create a new FAISS index with the correct dimension
         index.add(embeddings)
 
         # Extend metadata
         metadata.extend(new_chunks)
         print(f"Added {len(new_chunks)} new chunks to knowledge base.")
+
     else:
         print("No new data to add.")
 
-    # Update the docstore
     docstore = InMemoryDocstore({
         str(i): Document(
             page_content=chunk["text"],
-            metadata={"video_id": chunk["metadata"]["video_id"]} if "metadata" in chunk and "video_id" in chunk[
-                "metadata"] else {}
+            metadata={"video_id": chunk["metadata"]["video_id"]}
         )
         for i, chunk in enumerate(metadata)
     })
 
-    # Create the index-to-docstore mapping
     index_to_docstore_id = {i: str(i) for i in range(len(metadata))}
 
+    print(f"Number of vectors in FAISS index after updating knowledge base: {index.ntotal}")
     return index, metadata, docstore, index_to_docstore_id
 
-
 # Step 6: Query the Knowledge Base
-def query_knowledge_base(index, metadata, query):
-    """Query the FAISS vector store and provide results with clickable YouTube URLs."""
-    embedding_model = OpenAIEmbeddings()
-    docstore = InMemoryDocstore({
-        str(i): Document(
-            page_content=entry["text"],
-            metadata={"video_id": entry["metadata"]["video_id"]} if "metadata" in entry and "video_id" in entry[
-                "metadata"] else {}
-        )
-        for i, entry in enumerate(metadata)
-    })
-    index_to_docstore_id = {i: str(i) for i in range(len(metadata))}
-
-    vectorstore = FAISS(
-        embedding_function=embedding_model,
-        index=index,
-        docstore=docstore,
-        index_to_docstore_id=index_to_docstore_id,
-    )
-
-    try:
-        retrieved_docs = vectorstore.similarity_search(query, k=3)
-        print("\nRetrieved Documents:")
-        for doc in retrieved_docs:
-            text = doc.page_content
-            video_id = doc.metadata.get("video_id", "Unknown")
-
-            # Extract timestamp from the text
-            timestamp_match = text.split("]")[0].strip("[")  # Extract "[hh:mm:ss.sss]"
-            timestamp_parts = timestamp_match.split(":")
-            time_in_seconds = (
-                    int(timestamp_parts[0]) * 3600 +
-                    int(timestamp_parts[1]) * 60 +
-                    int(float(timestamp_parts[2]))
-            ) if len(timestamp_parts) == 3 else 0
-
-            # Construct YouTube URL with timestamp
-            url = f"https://www.youtube.com/watch?v={video_id}&t={time_in_seconds}s"
-
-            print(f"- {text[:100]} (Video ID: {video_id})")
-            print(f"  Link: {url}")
-
-    except ValueError as e:
-        print(f"Error during similarity search: {e}")
-
-
 def query_and_analyze_knowledge_base(index, metadata, query):
-    embedding_model = OpenAIEmbeddings()
-    docstore = InMemoryDocstore({
-        str(i): Document(
-            page_content=entry["text"],
-            metadata={"video_id": entry["metadata"]["video_id"]} if "metadata" in entry and "video_id" in entry[
-                "metadata"] else {}
-        )
-        for i, entry in enumerate(metadata)
-    })
-    index_to_docstore_id = {i: str(i) for i in range(len(metadata))}
-
-    vectorstore = FAISS(
-        embedding_function=embedding_model,
-        index=index,
-        docstore=docstore,
-        index_to_docstore_id=index_to_docstore_id,
-    )
-
     try:
-        # Retrieve relevant chunks
-        retrieved_docs = vectorstore.similarity_search(query, k=10)
+        # Create the docstore and vectorstore
+        docstore = InMemoryDocstore({
+            str(i): Document(
+                page_content=entry["text"],
+                metadata={"video_id": entry["metadata"]["video_id"]}
+            )
+            for i, entry in enumerate(metadata)
+        })
 
-        # Generate context with YouTube links g
+        index_to_docstore_id = {i: str(i) for i in range(len(metadata))}
+
+        # Create the FAISS vectorstore
+        vectorstore = FAISS(
+            embedding_function=embedding_function,
+            index=index,  # Correctly passing the FAISS index object
+            docstore=docstore,
+            index_to_docstore_id=index_to_docstore_id,
+        )
+
+        #print(f"Number of vectors in FAISS index: {index.ntotal}")
+
+        #retrieved_docs = vectorstore.similarity_search(query, k=3)
+        retrieved_docs = vectorstore.similarity_search(query, k=1)
         context_with_links = []
         for doc in retrieved_docs:
-            video_id = doc.metadata["video_id"].split(".")[0]
+            video_id = doc.metadata["video_id"]
             timestamp_str = doc.page_content.split("[")[1].split("]")[0]
             timestamp_parts = list(map(float, timestamp_str.split(":")))
             timestamp_seconds = int(timestamp_parts[0] * 3600 + timestamp_parts[1] * 60 + timestamp_parts[2])
             youtube_link = f"https://www.youtube.com/watch?v={video_id}&t={timestamp_seconds}s"
             context_with_links.append(f"{doc.page_content}\nLink: {youtube_link}")
 
-        # Prepare the context for LLM
         context = "\n\n".join(context_with_links)
+        #print(f"context: {context}")
+        lm_studio_url = "http://192.168.133.130:1234/v1/chat/completions"
 
-        llm = ChatOpenAI(model="gpt-4", temperature=0)
-
-        # Convert the prompt into the appropriate format
         messages = [
-            HumanMessage(content=f"""
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": f"""
             Context: 
             {context}
 
             Question: {query}
 
             Provide a detailed analysis in the form of a list, where each point starts on a new line. Clearly identify contradictions, agreements, or supporting statements. Include the YouTube links and timestamps where relevant information is found. Use structured formatting for clarity.
-            """)
+            """}
         ]
+        #logging.info(f"messages: {messages}")
 
-        # Call the LLM
-        analysis = llm(messages)
+        response = requests.post(
+            lm_studio_url,
+            headers={"Content-Type": "application/json"},
+            json={"model": "llama-3.2-1b-instruct", "messages": messages, "temperature": 0}
+        )
 
-        print("\nAnalysis:")
-        print(analysis.content)
-
-    except ValueError as e:
-        print(f"Error during similarity search: {e}")
-
-
-# Use the new multithreaded function in the main workflow
-def main():
-    index, metadata = load_knowledge_base()
-    if index is None:
-        index = faiss.IndexFlatL2(1536)
-        metadata = []
-
-    channel_id = CHANNEL_ID
-    video_ids = get_latest_video_ids(channel_id, 10)
-    download_transcripts(video_ids)  # Updated function
-    reformat_transcripts("transcripts", "transcripts_formatted")
-    chunks = chunkify_transcripts("transcripts_formatted")
-
-    index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata)
-    save_knowledge_base(index, metadata)
-
-    query = "diddy sexual assault?"
-    query_and_analyze_knowledge_base(index, metadata, query)
-
+        if response.status_code == 200:
+            analysis = response.json()["choices"][0]["message"]["content"]
+            print("\nAnalysis:")
+            print(analysis)
+        else:
+            print(f"Error querying LM Studio: {response.status_code}, {response.text}")
+    except Exception as e:
+        # Log the detailed error traceback
+        print(f"Error during query_and_analyze_knowledge_base: {str(e)}")
+        traceback.print_exc()  # This prints the full traceback to the console
 
 # Initialize FastAPI app
-app = FastAPI(title="PiersGPT API")
+app = FastAPI(title="ChannelGPT API")
 
 
 class Query(BaseModel):
     text: str
-    channel_id: Optional[str] = None
-
-
-def verify_channel_id(channel_id):
-    """Verify that a channel ID is valid and accessible"""
-    try:
-        youtube = build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
-        response = youtube.channels().list(
-            part="snippet",
-            id=channel_id
-        ).execute()
-        
-        if not response.get("items"):
-            print(f"Channel ID {channel_id} not found or not accessible")
-            return False, None
-        
-        channel_title = response["items"][0]["snippet"]["title"]
-        print(f"Successfully verified channel: {channel_title}")
-        return True, channel_title
-    except Exception as e:
-        print(f"Error verifying channel: {str(e)}")
-        return False, None
+    channel_id: Optional[str]
 
 
 @app.post("/query")
@@ -354,69 +294,51 @@ async def query_endpoint(query: Query = Body(...)):
         if not query.text:
             raise HTTPException(status_code=400, detail="Query text is required")
 
-        # Use the provided channel_id or fallback to CHANNEL_ID
-        channel_id = query.channel_id or CHANNEL_ID
-        
-        # Verify channel ID
-        is_valid, channel_title = verify_channel_id(channel_id)
-        if not is_valid:
-            raise HTTPException(status_code=400, detail=f"Invalid or inaccessible channel ID: {channel_id}")
-        print(f"Processing query for channel: {channel_title}")
+        channel_url = query.channel_id
+        verify_channel_url(channel_url)
 
-        # First, query the knowledge base to see if it exists and has content
         index, metadata = load_knowledge_base()
         if index is None or index.ntotal == 0:
-            print("Knowledge base empty or not found. Building initial knowledge base...")
-            index = faiss.IndexFlatL2(1536)
+            print("Knowledge base is empty. Fetching new data...")
+            index = faiss.IndexFlatL2(512)
             metadata = []
-            
-        # Always update with latest videos
-        print("Fetching latest videos...")
-        video_ids = get_latest_video_ids(channel_id, 10)
-        if video_ids:
-            print(f"Found {len(video_ids)} videos. Downloading transcripts...")
-            download_transcripts(video_ids)
-            print("Reformatting transcripts...")
-            reformat_transcripts("transcripts", "transcripts_formatted")
-            print("Creating chunks...")
-            chunks = chunkify_transcripts("transcripts_formatted")
-            
-            print("Updating knowledge base...")
-            index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata)
-            save_knowledge_base(index, metadata)
-        else:
-            print("No new videos found to process.")
+
+        video_ids = get_latest_video_ids(channel_url, 10)
+        if not video_ids:
+            return {"analysis": "No videos found for the provided channel URL."}
+
+        download_transcripts(video_ids)
+        reformat_transcripts("transcripts", "transcripts_formatted")
+        chunks = chunkify_transcripts("transcripts_formatted")
+        print(f"Number of chunks created: {len(chunks)}")
+        print(f"First 5 chunks: {chunks[:5]}")
+
+        index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata)
+        save_knowledge_base(index, metadata)
 
         if index.ntotal == 0:
-            return {"analysis": "No content available in the knowledge base. Please check the channel ID and try again."}
+            return {"analysis": "No content available in the knowledge base. Please check the channel URL and try again."}
 
-        # Capture the output from query_and_analyze_knowledge_base
         from io import StringIO
         import sys
 
-        # Redirect stdout to capture output
         old_stdout = sys.stdout
         result = StringIO()
         sys.stdout = result
 
-        # Run the query
-        print(f"Querying knowledge base with: {query.text}")
         query_and_analyze_knowledge_base(index, metadata, query.text)
 
-        # Restore stdout and capture the result
         sys.stdout = old_stdout
         response = result.getvalue()
 
         return {"analysis": response}
+
     except Exception as e:
+        # Log the detailed error traceback
         print(f"Error in query_endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        traceback.print_exc()  # This prints the full traceback to the console
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8001)
-
-# todo:
-# convert user id to channel id
-# clean up code a bit to modularize it
-# host it, take screenshots and post it on github and X
+    uvicorn.run(app, host="0.0.0.0", port=8001)
