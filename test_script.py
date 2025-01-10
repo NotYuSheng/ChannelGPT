@@ -5,6 +5,9 @@ class Tools:
         pass
 
     def query_knowledge_base(self, channel_handle: str, query_text: str) -> str:
+        """
+        Query knowledge base for relevant video contexts
+        """
         api_url = "http://192.168.133.130:8001/query"
 
         payload = {
@@ -31,7 +34,6 @@ class Tools:
                 except:
                     pass
             return f"Error: {str(e)}"
-
 
 # Test the tool
 if __name__ == "__main__":
