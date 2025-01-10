@@ -2,7 +2,7 @@
 
 This project integrates **ChannelGPT** with **Open WebUI** as a tool for querying and analyzing YouTube channels' content using natural language.
 
-Reliance on **OpenAI** models has been replaced with free alternatives like **vLLM** and **LM Studio**, ensuring self-dependant localized deployment. Additionally, the **Google API Client Discovery** has been replaced by **yt-dlp**, which scrapes YouTube's web interface to gather video data. For data embeddings, models from **Hugging Face** are utilized to handle content analysis and queries.
+Reliance on **OpenAI** models has been replaced with free alternatives like **vLLM** or **LM Studio**, ensuring self-dependant localized deployment. Additionally, the **Google API Client Discovery** has been replaced by **yt-dlp**, which scrapes YouTube's web interface to gather video data. For data embeddings, models from **Hugging Face** are utilized to handle content analysis and queries.
 
 <a href="#"><img alt="last-commit" src="https://img.shields.io/github/last-commit/NotYuSheng/ChannelGPT?color=red"></a>
 
@@ -37,6 +37,6 @@ Reliance on **OpenAI** models has been replaced with free alternatives like **vL
 
 This project is inspired by the original [ChannelGPT repository](https://github.com/a2ashraf/ChannelGPT) by [a2ashraf](https://github.com/a2ashraf). Significant modifications have been made, including:
 
-- Replacing reliance on OpenAI models with **vLLM** and **LM Studio**.
+- Replacing reliance on OpenAI models with **vLLM** or **LM Studio**.
 - Replacing the Google API Client Discovery with **yt-dlp** for web scraping YouTube data.
 - Using **Hugging Face models** for embedding channel content.
