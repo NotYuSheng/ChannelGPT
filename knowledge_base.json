@@ -1,0 +1,47 @@
+title: YouTube Knowledge Base Tool
+description: This tool converts YouTube channel videos into a knowledge base and allows querying using natural language.
+
+import os
+import requests
+from typing import Optional
+
+
+class Tools:
+    def __init__(self):
+        pass
+
+    def query_knowledge_base(self, channel_id: str, query_text: str) -> str:
+        """
+        Query the knowledge base generated from a YouTube channel.
+        :param channel_id: The ID of the YouTube channel to query.
+        :param query_text: The natural language query to send to the knowledge base.
+        :return: The query result or an error message.
+        """
+        api_url = os.getenv("KNOWLEDGE_BASE_API_URL")
+        if not api_url:
+            return "Error: API URL is not set in the environment variable 'KNOWLEDGE_BASE_API_URL'."
+
+        payload = {
+            "text": query_text,
+            "channel_id": channel_id.strip() or None
+        }
+
+        try:
+            response = requests.post(api_url, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            if "detail" in result and "YouTube API error" in result["detail"]:
+                return f"Error with YouTube API: {result['detail']}\nPlease check your YouTube API key configuration."
+            return result.get("analysis", "No analysis found.")
+        except requests.exceptions.ConnectionError:
+            return "Error: Could not connect to the server. Please ensure the FastAPI server is running."
+        except requests.exceptions.RequestException as e:
+            if hasattr(e.response, 'json'):
+                try:
+                    error_detail = e.response.json().get('detail', str(e))
+                    if "YouTube API error" in error_detail:
+                        return f"Error with YouTube API: {error_detail}\nPlease check your YouTube API key configuration."
+                    return f"Error: {error_detail}"
+                except:
+                    pass
+            return f"Error: {str(e)}"
