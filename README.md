@@ -18,6 +18,7 @@ Reliance on **OpenAI** models has been replaced with free alternatives like **vL
 - **Free Alternatives:** Replaces proprietary APIs and models (OpenAI, Google) with open-source and free alternatives (vLLM, LM Studio, Hugging Face models).
 - **Web Scraping:** Gathers YouTube channel data without relying on the Google API.
 - **Flexible Embedding Models:** Uses and evaluates various models from Hugging Face for embedding channel content.
+- **Dockerized Backend:** The backend **FastAPI server** has been containerized using Docker for easy deployment.
 
 ---
 
