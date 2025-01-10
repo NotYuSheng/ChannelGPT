@@ -7,6 +7,9 @@ class Tools:
     def query_knowledge_base(self, channel_handle: str, query_text: str) -> str:
         """
         Query knowledge base for relevant video contexts
+        :param channel_handle: The handle of the YouTube channel to query.
+        :param query_text: The natural language query to send to the knowledge base.
+        :return: The query result or an error message.
         """
         api_url = "http://192.168.133.130:8001/query"
 
