@@ -1,5 +1,5 @@
-title: YouTube Knowledge Base Tool
-description: This tool converts YouTube channel videos into a knowledge base and allows querying using natural language.
+title: "YouTube Knowledge Base Tool"
+description: "This tool converts YouTube channel videos into a knowledge base and allows querying using natural language."
 
 import os
 import requests
@@ -10,20 +10,18 @@ class Tools:
     def __init__(self):
         pass
 
-    def query_knowledge_base(self, channel_id: str, query_text: str) -> str:
+    def query_knowledge_base(self, channel_handle: str, query_text: str) -> str:
         """
         Query the knowledge base generated from a YouTube channel.
-        :param channel_id: The ID of the YouTube channel to query.
+        :param channel_handle: The handle of the YouTube channel to query.
         :param query_text: The natural language query to send to the knowledge base.
         :return: The query result or an error message.
         """
-        api_url = os.getenv("KNOWLEDGE_BASE_API_URL")
-        if not api_url:
-            return "Error: API URL is not set in the environment variable 'KNOWLEDGE_BASE_API_URL'."
+        api_url = "http://192.168.133.130:8001/query"
 
         payload = {
             "text": query_text,
-            "channel_id": channel_id.strip() or None
+            "channel_handle": channel_handle
         }
 
         try:
