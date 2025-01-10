@@ -9,18 +9,27 @@ To promote flexibility and reduce dependency on external services, the reliance 
 > [!WARNING]  
 > This project is incomplete and still a work in progress.
 
----
+## How It Works
+
+1. **Building the Knowledge Base**  
+   The system collects data from a YouTube channel, such as video titles, descriptions, and transcripts, using **yt-dlp**. This data is processed using advanced models to create a "knowledge base"—a kind of searchable database that understands the content.
+
+2. **Hosting the Backend Server**  
+   A **FastAPI backend server** hosts the knowledge base. This server stores all the processed information and handles requests to search for relevant answers.
+
+3. **Querying the Backend Server**  
+   The **Open WebUI** provides a user-friendly interface where users can ask questions about the YouTube channel. When a user submits a question, the agent in Open WebUI sends the query to the FastAPI backend server. The server searches its knowledge base for the most relevant information and sends back an answer.
+
+4. **Providing Answers**  
+   The Open WebUI agent displays the answer to the user. This allows users to quickly get insights about a YouTube channel’s content without manually searching through videos.
 
 ## Features
 
-- **Natural Language Querying:** Enables users to query YouTube channels' content using plain language.
-- **Open WebUI Integration:** Supports querying through a user-friendly web interface.
-- **Free Alternatives:** Replaces proprietary APIs and models (OpenAI, Google) with open-source and free alternatives (vLLM, LM Studio, Hugging Face models).
-- **yt-dlp for Web Scraping:** Uses **yt-dlp** to gather YouTube video data without relying on the Google API.
-- **Flexible Embedding Models:** Uses and evaluates various models from Hugging Face for embedding channel content.
-- **Dockerized Backend:** The backend **FastAPI server** has been containerized using Docker for easy deployment.
-
----
+- **Ask Questions Easily:** Users can type questions in plain language, and the system will provide answers based on YouTube channel content.
+- **No Paid Services Needed:** The system uses free, open-source models like **vLLM**, **LM Studio**, and **Hugging Face models**, so there's no need to rely on expensive APIs.
+- **Automatic Data Collection:** Video information is automatically gathered from YouTube using **yt-dlp**.
+- **Backend Server with Knowledge Base:** The backend server stores and processes YouTube data, making it fast and easy to find answers.
+- **Web Interface for Users:** The **Open WebUI** provides a simple interface that anyone can use to ask questions and get answers.
 
 ## Embedding Models Considered
 
