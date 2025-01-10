@@ -1,10 +1,7 @@
 title: "YouTube Knowledge Base Tool"
 description: "This tool converts YouTube channel videos into a knowledge base and allows querying using natural language."
 
-import os
 import requests
-from typing import Optional
-
 
 class Tools:
     def __init__(self):
@@ -12,7 +9,7 @@ class Tools:
 
     def query_knowledge_base(self, channel_handle: str, query_text: str) -> str:
         """
-        Query the knowledge base generated from a YouTube channel.
+        Query knowledge base for relevant video contexts
         :param channel_handle: The handle of the YouTube channel to query.
         :param query_text: The natural language query to send to the knowledge base.
         :return: The query result or an error message.
@@ -41,5 +38,7 @@ class Tools:
                         return f"Error with YouTube API: {error_detail}\nPlease check your YouTube API key configuration."
                     return f"Error: {error_detail}"
                 except:
+                    pass
+            return f"Error: {str(e)}"
                     pass
             return f"Error: {str(e)}"
