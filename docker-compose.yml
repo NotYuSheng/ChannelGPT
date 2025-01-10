@@ -1,0 +1,16 @@
+services:
+  youtube-knowledgebase:
+    image: fastapi-youtube-knowledgebase:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8001
+      - UVICORN_LOG_LEVEL=debug
+      - PYTHONUNBUFFERED=1
+    restart: always
