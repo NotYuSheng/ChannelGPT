@@ -33,12 +33,12 @@ To promote flexibility and reduce dependency on external services, the reliance 
 
 ## Embedding Models Considered
 
-| Model Name                                   | Description                                   | Status  |
-|---------------------------------------------|---------------------------------------------|---------|
-| `sentence-transformers/all-mpnet-base-v2`   | General-purpose embedding model from Sentence Transformers | ❌ Untested |
-| `distiluse-base-multilingual-cased-v1`      | Multilingual embedding model from Sentence Transformers   | ❌ Untested |
-| `BAAI/bge-large-en-v1.5`                    | Large English embedding model from BAAI                  | ❌ Untested |
-| `BAAI/bge-base-en-v1.5`                     | Base English embedding model from BAAI                   | ✅ Tested   |
+| Model Name                                                   | Description                                                | Status      |
+|--------------------------------------------------------------|------------------------------------------------------------|-------------|
+| `sentence-transformers/all-mpnet-base-v2`                    | General-purpose embedding model from Sentence Transformers | ❌ Untested |
+| `sentence-transformers/distiluse-base-multilingual-cased-v1` | Multilingual embedding model from Sentence Transformers    | ❌ Untested |
+| `BAAI/bge-large-en-v1.5`                                     | Large English embedding model from BAAI                    | ❌ Untested |
+| `BAAI/bge-base-en-v1.5`                                      | Base English embedding model from BAAI                     | ✅ Tested   |
 
 ---
 
