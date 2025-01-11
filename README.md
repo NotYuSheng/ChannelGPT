@@ -46,8 +46,8 @@ To promote flexibility and reduce dependency on external services, the reliance 
 This project is inspired by the original [ChannelGPT repository](https://github.com/a2ashraf/ChannelGPT) by [a2ashraf](https://github.com/a2ashraf). Significant modifications have been made, including:
 
 - Replacing the **Gradio frontend** with **Open WebUI**.
-- Replacing reliance on OpenAI models with **vLLM** or **LM Studio**.
-- Replacing the Google API Client Discovery with **yt-dlp** for web scraping YouTube data.
+- Replacing reliance on **OpenAI GPT4** with **vLLM** or **LM Studio**.
+- Replacing the **Google API Client Discovery** with **yt-dlp** for web scraping YouTube data.
 - Using **Hugging Face models** for embedding channel content.
 
 For a detailed presentation, refer to the [Google Slides](https://docs.google.com/presentation/d/1-fByxUlOslhKEuLHqnWeTu0N_QsHAox3wgATqQPI1qo/edit#slide=id.g32aa57a467b_0_68).
