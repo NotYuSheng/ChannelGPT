@@ -1,4 +1,4 @@
-# ChannelGPT
+# ChannelGPT-Tool
 
 This project integrates **ChannelGPT** with **Open WebUI**, enabling natural language querying and analysis of YouTube channel content. 
 
