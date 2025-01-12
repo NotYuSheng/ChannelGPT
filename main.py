@@ -28,6 +28,16 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 INDEX_PATH = "/app/data/faiss_index.bin"
 METADATA_PATH = "/app/data/metadata.json"
 
+# Read the IP address and port from environment variables
+inference_server_ip = os.getenv("INFERENCE_SERVER_IP")
+inference_server_port = os.getenv("INFERENCE_SERVER_PORT")
+
+if not ip_address or not port:
+    raise ValueError("INFERENCE_SERVER_IP and INFERENCE_SERVER_PORT must be set in the environment")
+
+# Construct the full URL
+inference_server_url = f"http://{inference_server_ip}:{inference_server_port}/v1/chat/completions"
+
 # # Ensure the directory exists
 # os.makedirs(os.path.dirname(INDEX_PATH), exist_ok=True)
 
@@ -247,7 +257,6 @@ def query_and_analyze_knowledge_base(index, metadata, query):
 
         context = "\n\n".join(context_with_links)
         #print(f"context: {context}")
-        lm_studio_url = "http://192.168.133.130:1234/v1/chat/completions"
 
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -263,7 +272,7 @@ def query_and_analyze_knowledge_base(index, metadata, query):
         #logging.info(f"messages: {messages}")
 
         response = requests.post(
-            lm_studio_url,
+            inference_server_url,
             headers={"Content-Type": "application/json"},
             json={"model": "llama-3.2-1b-instruct", "messages": messages, "temperature": 0}
         )
