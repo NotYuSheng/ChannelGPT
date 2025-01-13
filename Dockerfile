@@ -1,6 +1,9 @@
 # Use the official Python image with a slim base
 FROM python:3.10-slim
 
+# Install system dependencies including ffmpeg
+RUN apt-get update && apt-get install -y ffmpeg
+
 # Set the working directory in the container
 WORKDIR /app
 
