@@ -139,17 +139,26 @@ def reformat_transcripts(input_folder: str, output_folder: str) -> None:
 def chunkify_transcripts(folder: str, video_details: list) -> list:
     """Chunkify reformatted transcripts into smaller segments for embedding."""
     chunks = []
-    video_details_map = {detail["video_id"]: detail for detail in video_details}
+    # Initialize an empty dictionary to store the video details
+    video_details_map = {}
+
+    # Iterate through each item in the video_details list
+    for detail in video_details:
+        # Extract the video_id from the current detail
+        video_id = detail["video_id"]
+        
+        # Add the detail to the dictionary with video_id as the key
+        video_details_map[video_id] = detail
 
     for file_name in os.listdir(folder):
         if file_name.endswith("_formatted.txt"):
-            video_id = file_name.replace("_formatted.txt", "")
-            if video_id not in video_details_map:
-                continue
+            video_id = file_name.replace("_formatted.txt", "")[:-3]
             with open(os.path.join(folder, file_name), "r") as file:
                 transcript = file.read()
 
             splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+            logging.info(f"video_id: {video_id}")
+            logging.info(f"video_details_map[video_id]{video_details_map[video_id]}")
             for chunk_text in splitter.split_text(transcript):
                 chunks.append({
                     "text": chunk_text,
