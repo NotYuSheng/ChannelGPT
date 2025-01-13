@@ -210,6 +210,7 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list):
             new_chunks = chunks
 
     if new_chunks:
+        logging.debug(f"Embedding {len(new_chunks)} new chunks...")
         # Embed new texts using Hugging Face embeddings
         texts = [chunk["text"] for chunk in new_chunks]
         
