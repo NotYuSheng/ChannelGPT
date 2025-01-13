@@ -155,10 +155,8 @@ def chunkify_transcripts(folder: str, video_details: list) -> list:
             video_id = file_name.replace("_formatted.txt", "")[:-3]
             with open(os.path.join(folder, file_name), "r") as file:
                 transcript = file.read()
-
             splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-            logging.info(f"video_id: {video_id}")
-            logging.info(f"video_details_map[video_id]{video_details_map[video_id]}")
+            
             for chunk_text in splitter.split_text(transcript):
                 chunks.append({
                     "text": chunk_text,
