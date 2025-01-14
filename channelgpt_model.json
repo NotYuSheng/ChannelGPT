@@ -23,7 +23,7 @@
 	"preset": true,
 	"model": {
       "id": "",
-      "userId": "3162879e-99ca-436c-b9f0-54d984031e28",
+      "userId": "",
       "model": {
         "id": "channelgpt",
         "base_model_id": "llama3:latest",
