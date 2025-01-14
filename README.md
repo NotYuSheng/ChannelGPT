@@ -9,6 +9,10 @@ To promote flexibility and reduce dependency on external services, the reliance 
 > [!WARNING]
 > This project is operational, but it's still in its early phases. Ongoing work is focused on bug fixes and performance improvements.
 
+<div align="center">
+  <img src="sample-img/DEMO.png" alt="Demo image" />
+</div>
+
 ## How It Works
 
 1. **Building the Knowledge Base**  
