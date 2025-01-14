@@ -67,8 +67,14 @@ embedding_function = HuggingFaceEmbeddings(
     encode_kwargs=encode_kwargs
 )
 
+
+# Embed a sample text to check the dimensionality
+sample_embeddings = embedding_function.embed_documents(["test text"])  # Embed sample text
+embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
+logging.info(f"Embedding dimensionality: {embedding_dim}")  # Check the dimensionality
+
 # Get the dimensionality by embedding a minimal valid input (empty string)
-embedding_dim = len(embedding_function.embed_query(""))
+#embedding_dim = len(embedding_function.embed_query(""))
 
 # Initialize the FAISS index with the correct dimensionality
 index = faiss.IndexFlatL2(embedding_dim)
@@ -237,19 +243,8 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list):
 
     if new_chunks:
         logging.debug(f"Embedding {len(new_chunks)} new chunks...")
-        # Embed new texts using Hugging Face embeddings
-        texts = [chunk["text"] for chunk in new_chunks]
-        
-        # Generate embeddings for the texts
-        embeddings = np.array(embedding_function.embed_documents(texts))
 
-        # TODO: Check
-        # Add new embeddings to FAISS index
-        embedding_dim = embeddings.shape[1]  # Get the dimensionality of the embeddings
-        if index.ntotal == 0:
-            index = faiss.IndexFlatL2(embedding_dim)  # Create a new FAISS index with the correct dimension
-        index.add(embeddings)
-
+        # TODO: Verify video details added properly
         # Extend metadata
         metadata.extend(new_chunks)
         logging.info(f"Added {len(new_chunks)} new chunks to knowledge base.")
@@ -381,12 +376,20 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
 
         index, metadata = load_knowledge_base()
 
+        # TODO: Temp
+        if not isinstance(index, faiss.Index):
+            raise ValueError("392 The provided index is not a valid FAISS index instance.")
+
         if index is None or index.ntotal == 0:
             logging.info("Knowledge base is empty. Fetching new data...")
             # TODO: Check this value
             #index = faiss.IndexFlatL2(512)
             index = faiss.IndexFlatL2(embedding_dim)
             metadata = []
+
+        # TODO: Temp
+        if not isinstance(index, faiss.Index):
+            raise ValueError("403 The provided index is not a valid FAISS index instance.")
 
         # Update metadata with new video details
         #metadata.extend(video_details)
@@ -400,8 +403,17 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         logging.info(f"Number of chunks created: {len(chunks)}")
         logging.info(f"First 5 chunks: {chunks[:5]}")
 
+        # TODO: Temp
+        if not isinstance(index, faiss.Index):
+            raise ValueError("419 The provided index is not a valid FAISS index instance.")
+
         index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata, video_details)
         # TODO: Check purpose of docstore and index_to_docstore_id
+        
+        # TODO: Temp
+        if not isinstance(index, faiss.Index):
+            raise ValueError("426 The provided index is not a valid FAISS index instance.")
+        
         save_knowledge_base(index, metadata)
 
         if index.ntotal == 0:
