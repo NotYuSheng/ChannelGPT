@@ -14,14 +14,14 @@ ChannelGPT-Tool is a custom-built application designed to provide advanced query
 
 ## How It Works
 
-### 1. **User Interaction with Open WebUI**
+### 1. User Interaction with Open WebUI
 - A user types a query and provides a YouTube channel handle in the **Open WebUI** interface.
 - The query and channel handle are sent to an **agent tool**.
 
-### 2. **Agent Communication with Backend**
+### 2. Agent Communication with Backend
 - The agent forwards the query and channel handle to a **FastAPI backend server**.
 
-### 3. **Building the Knowledge Base**
+### 3. Building the Knowledge Base
 - The backend server uses `yt-dlp` to scrape the provided YouTube channel, collecting:
   - **Video titles**
   - **Video id**
@@ -31,16 +31,16 @@ ChannelGPT-Tool is a custom-built application designed to provide advanced query
 - Each chunk is embedded using a model from **Hugging Face**, converting the content into a format suitable for **similarity searches**.
 - The processed chunks are stored in a searchable **knowledge base**.
 
-### 4. **Similarity Search for Context**
+### 4. Similarity Search for Context
 - The server performs a **similarity search** in the knowledge base using the user's query.
 - It retrieves the most relevant chunks of information related to the query, along with:
   - **Timestamps**
   - **Links** to specific moments in the videos.
 
-### 5. **Sending Context to Agent**
+### 5. Sending Context to Agent
 - The retrieved video context (key information from relevant videos) is sent back to the **agent**.
 
-### 6. **Agent Response to Open WebUI**
+### 6. Agent Response to Open WebUI
 - The agent uses the **video context** to craft a meaningful response to the user’s query.
 - This response is displayed in **Open WebUI**, allowing the user to gain insights without manually searching through the videos.
 
