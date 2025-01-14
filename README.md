@@ -1,8 +1,7 @@
 # ChannelGPT-Tool
-
 This project integrates **ChannelGPT** with **Open WebUI**, enabling natural language querying and analysis of YouTube channel content. 
 
-To promote flexibility and reduce dependency on external services, the reliance on proprietary models like **OpenAI** has been replaced with free, open-source alternatives such as **vLLM** and **LM Studio**, allowing for independent, localized deployment. The **Google API Client Discovery** has been replaced by **yt-dlp**, a web scraping tool that extracts video data directly from YouTube’s web interface. For content analysis and embedding generation, models from **Hugging Face** are utilized, ensuring high-quality insights and accurate query handling.
+ChannelGPT-Tool is a custom-built application designed to provide advanced querying and analysis of YouTube channel content using AI-driven techniques. By combining powerful open-source models and tools, this project enables users to extract insights from YouTube videos without manually sifting through hours of content. Key features include independent deployment, seamless backend integration, and a user-friendly interface.
 
 <a href="#"><img alt="last-commit" src="https://img.shields.io/github/last-commit/NotYuSheng/ChannelGPT?color=red"></a>
 
