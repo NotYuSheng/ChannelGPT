@@ -26,6 +26,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 # Paths for saving knowledge base
 INDEX_PATH = "/app/data/faiss_index.bin"
 METADATA_PATH = "/app/data/metadata.json"
+INDEX_TO_DOCSTORE_ID_PATH = "/app/data/index_to_docstore_id.json"
+DOCSTORE_PATH = "/app/data/docstore.json"
 
 # Define paths
 model_name = "BAAI/bge-base-en-v1.5"
@@ -180,6 +182,7 @@ def chunkify_transcripts(folder: str, video_details: list) -> list:
         # Add the detail to the dictionary with video_id as the key
         video_details_map[video_id] = detail
 
+    logging.info(f"video_details_map: {video_details_map}")
     for file_name in os.listdir(folder):
         if file_name.endswith("_formatted.txt"):
             video_id = file_name.replace("_formatted.txt", "")[:-3]
@@ -199,40 +202,53 @@ def chunkify_transcripts(folder: str, video_details: list) -> list:
     return chunks
 
 # Step 5: Knowledge Base Management
-def save_knowledge_base(index, metadata: list) -> None:
-    """Save the FAISS index and metadata to disk."""
+def save_knowledge_base(index, metadata: list, index_to_docstore_id: dict, docstore: dict) -> None:
+    """Save the FAISS index, metadata, index_to_docstore_id, and docstore to disk."""
     faiss.write_index(index, INDEX_PATH)
     with open(METADATA_PATH, "w") as f:
         json.dump(metadata, f)
+    with open(INDEX_TO_DOCSTORE_ID_PATH, "w") as f:
+        json.dump(index_to_docstore_id, f)
+    
+    # Serialize docstore content
+    serialized_docstore = {k: {"page_content": v.page_content, "metadata": v.metadata} for k, v in docstore._dict.items()}
+    with open(DOCSTORE_PATH, "w") as f:
+        json.dump(serialized_docstore, f)
+    
     print("Knowledge base saved.")
 
 def load_knowledge_base():
-    """Load the FAISS index and metadata from disk."""
-    if os.path.exists(INDEX_PATH) and os.path.exists(METADATA_PATH):
+    """Load the FAISS index, metadata, index_to_docstore_id, and docstore from disk."""
+    if all(os.path.exists(path) for path in [INDEX_PATH, METADATA_PATH, INDEX_TO_DOCSTORE_ID_PATH, DOCSTORE_PATH]):
         index = faiss.read_index(INDEX_PATH)
         with open(METADATA_PATH, "r") as f:
             metadata = json.load(f)
+        with open(INDEX_TO_DOCSTORE_ID_PATH, "r") as f:
+            index_to_docstore_id = json.load(f)
+        
+        # Deserialize docstore content
+        with open(DOCSTORE_PATH, "r") as f:
+            serialized_docstore = json.load(f)
+        docstore_data = {k: Document(page_content=v["page_content"], metadata=v["metadata"]) for k, v in serialized_docstore.items()}
+        docstore = InMemoryDocstore(docstore_data)
+        
         print("Knowledge base loaded.")
-        return index, metadata
+        return index, metadata, index_to_docstore_id, docstore
     else:
-        # Embed a sample text to check the dimensionality
-        #sample_embeddings = embedding_function.embed_documents(["test text"])  # Embed sample text
-        #embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
-        #print(f"Embedding dimensionality: {embedding_dim}")  # Check the dimensionality
-
-        # Initialize the FAISS index with the correct dimensionality
+        # Initialize a new knowledge base if no files are found
         index = faiss.IndexFlatL2(embedding_dim)
-
         metadata = []
+        index_to_docstore_id = {}
+        docstore = InMemoryDocstore({})
         print("No existing knowledge base found. Initialized a new one.")
-        return index, metadata
+        return index, metadata, index_to_docstore_id, docstore
 
-def update_knowledge_base(chunks, index, metadata: list, video_details: list):
+def update_knowledge_base(chunks, index, metadata: list, video_details: list, docstore: InMemoryDocstore, index_to_docstore_id: dict):
     """Update the FAISS index with new data."""
     # Extract existing video IDs from metadata
     existing_ids = {entry["metadata"]["video_id"] for entry in metadata}
 
-    # All chunks uses the same video_id, so we just have to ensure this video has not been added before
+    # All chunks use the same video_id, so we just have to ensure this video has not been added before
     new_chunks = []
     if len(chunks) > 0:
         if chunks[0]["metadata"]["video_id"] not in existing_ids:
@@ -261,41 +277,32 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list):
         logging.info("No new data to add.")
 
     # Create a lookup dictionary for video details by video_id
-    video_lookup = {}
-    for detail in video_details:
-        video_id = detail["video_id"]
-        video_lookup[video_id] = {
-            "title": detail["title"],
-            "channel": detail["channel"]
-        }
+    video_lookup = {detail["video_id"]: {"title": detail["title"], "channel": detail["channel"]} for detail in video_details}
 
-    # Initialize an empty dictionary for the docstore
-    docstore_data = {}
+    # Update docstore with new chunks
+    docstore_data = docstore._dict.copy()
+    starting_index = len(docstore_data)  # Start from the current size of the docstore
 
-    # Use a for loop to populate the docstore data
-    for i, chunk in enumerate(metadata):
+    for i, chunk in enumerate(new_chunks):
         video_id = chunk["metadata"]["video_id"]
-
-        # Check if the video_id exists in video_lookup and update title and channel
         if video_id in video_lookup:
             title = video_lookup[video_id]["title"]
             channel = video_lookup[video_id]["channel"]
+            docstore_data[str(starting_index + i)] = Document(
+                page_content=chunk["text"],
+                metadata={
+                    "video_id": video_id,
+                    "title": title,
+                    "channel": channel
+                }
+            )
 
-        docstore_data[str(i)] = Document(
-            page_content=chunk["text"],
-            metadata={
-                "video_id": video_id,
-                "title": title,
-                "channel": channel
-            }
-        )
-
-    # Create the InMemoryDocstore using the populated dictionary
+    # Create a new InMemoryDocstore with updated data
     docstore = InMemoryDocstore(docstore_data)
 
-    index_to_docstore_id = {i: str(i) for i in range(len(metadata))}
+    # Update index_to_docstore_id with new mappings
+    index_to_docstore_id.update({index.ntotal - len(new_chunks) + i: str(len(metadata) - len(new_chunks) + i) for i in range(len(new_chunks))})
 
-    #logging.info(f"Number of vectors in FAISS index after updating knowledge base: {index.ntotal}")
     return index, metadata, docstore, index_to_docstore_id
 
 # Step 6: Query the Knowledge Base
@@ -402,7 +409,7 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         video_details = get_video_details(video_ids, query.channel_handle)
         logging.info(f"video_details: {video_details}")
 
-        index, metadata = load_knowledge_base()
+        index, metadata, index_to_docstore_id, docstore = load_knowledge_base()
 
         # Update metadata with new video details
         #metadata.extend(video_details)
@@ -416,18 +423,9 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         logging.info(f"Number of chunks created: {len(chunks)}")
         logging.info(f"First 5 chunks: {chunks[:5]}")
 
-        # TODO: Temp
-        if not isinstance(index, faiss.Index):
-            raise ValueError("419 The provided index is not a valid FAISS index instance.")
-
-        index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata, video_details)
-        # TODO: Check purpose of docstore and index_to_docstore_id
+        index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata, video_details, docstore, index_to_docstore_id)
         
-        # TODO: Temp
-        if not isinstance(index, faiss.Index):
-            raise ValueError("426 The provided index is not a valid FAISS index instance.")
-        
-        save_knowledge_base(index, metadata)
+        save_knowledge_base(index, metadata, index_to_docstore_id, docstore)
 
         if index.ntotal == 0:
             return {"analysis": "No content available in the knowledge base. Please check the channel URL and try again."}
