@@ -59,8 +59,8 @@ else:
 
 # Load embedding model
 local_model_path = "./models/bge-base-en-v1.5"
-#model_kwargs = {'device': 'cpu'}
-model_kwargs = {'device': 'cuda'}
+model_kwargs = {'device': 'cpu'}
+#model_kwargs = {'device': 'cuda'}
 encode_kwargs = {'normalize_embeddings': False}
 
 embedding_function = HuggingFaceEmbeddings(
@@ -361,12 +361,13 @@ def query_and_analyze_knowledge_base(index, metadata: list, query: str, channel_
 
         for doc in retrieved_docs:
             video_id = doc.metadata["video_id"]
+            title = doc.metadata["title"]
             timestamp_str = doc.page_content.split("[")[1].split("]")[0]
             timestamp_parts = list(map(float, timestamp_str.split(":")))
             timestamp_seconds = int(timestamp_parts[0] * 3600 + timestamp_parts[1] * 60 + timestamp_parts[2])
             youtube_link = f"https://www.youtube.com/watch?v={video_id}&t={timestamp_seconds}s"
             context_with_links.append(f"{doc.page_content}\nLink: {youtube_link}")
-            logging.info(f"Appended context with link: {doc.page_content[:100]}... Link: {youtube_link}")
+            logging.info(f"Title: {title}\n{doc.page_content}\nLink: {youtube_link}")
 
         context = "\n\n".join(context_with_links)
 
