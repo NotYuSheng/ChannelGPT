@@ -19,9 +19,5 @@ COPY . /app
 # Expose the FastAPI port
 EXPOSE 8001
 
-# Set the environment variable for uvicorn to run in production mode
-ENV HOST 0.0.0.0
-ENV PORT 8001
-
 # Command to run the FastAPI app
 CMD ["uvicorn", "main:app", "--reload", "--host", "0.0.0.0", "--port", "8001", "--log-level", "debug"]
