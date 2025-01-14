@@ -7,7 +7,7 @@ To promote flexibility and reduce dependency on external services, the reliance 
 <a href="#"><img alt="last-commit" src="https://img.shields.io/github/last-commit/NotYuSheng/ChannelGPT?color=red"></a>
 
 > [!WARNING]
-> This project is operational, but it's still in its early phases. Ongoing work is focused on bug fixes and performance improvements.
+> This project is functional but still in its early phases. Ongoing work is focused on bug fixes and performance improvements.
 
 <div align="center">
   <img src="sample-img/Response-Sample.png" alt="Demo image" />
