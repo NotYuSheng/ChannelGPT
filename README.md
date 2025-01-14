@@ -24,6 +24,7 @@ ChannelGPT-Tool is a custom-built application designed to provide advanced query
 ### 3. **Building the Knowledge Base**
 - The backend server uses `yt-dlp` to scrape the provided YouTube channel, collecting:
   - **Video titles**
+  - **Video id**
   - **Descriptions**
   - **Transcripts**
 - The collected information is processed into smaller **chunks**.
