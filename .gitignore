@@ -1,2 +1,4 @@
-# Ignore everything in the data folder
+# Ignore all volumes
 data/*
+models/*
+open-webui-data
