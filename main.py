@@ -18,6 +18,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
+from sentence_transformers import SentenceTransformer, models
 
 # Configure logging to output to stdout
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
@@ -26,18 +27,42 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
 INDEX_PATH = "/app/data/faiss_index.bin"
 METADATA_PATH = "/app/data/metadata.json"
 
+# Define paths
+model_name = "BAAI/bge-base-en-v1.5"
+#model_name = "BAAI/bge-large-en-v1.5"
 #model_name = "sentence-transformers/all-mpnet-base-v2"
 #model_name = "sentence-transformers/distiluse-base-multilingual-cased-v1"
-#model_name = "BAAI/bge-large-en-v1.5"
+# Local directory to save the model
+local_model_path = "./models/bge-base-en-v1.5"
+
+# Check if the model is already saved locally
+if not os.path.exists(local_model_path):
+    logging.info(f"Model not found at {local_model_path}. Downloading and converting...")
+
+    # Load the Hugging Face model and tokenizer
+    word_embedding_model = models.Transformer(model_name, max_seq_length=512)
+
+    # Apply mean pooling to get sentence embeddings
+    pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
+
+    # Create a SentenceTransformer model with the transformer and pooling modules
+    transformer_model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+
+    # Save the model in the sentence-transformers format
+    transformer_model.save(local_model_path)
+
+    logging.info(f"Model successfully saved at {local_model_path}")
+else:
+    logging.info(f"Model already exists at {local_model_path}. No action needed.")
 
 # Load embedding model
-model_name = "BAAI/bge-base-en-v1.5"
-model_kwargs = {'device': 'cpu'}
-#MODEL_KWARGS = {'device': 'cuda'}
+local_model_path = "./models/bge-base-en-v1.5"
+#model_kwargs = {'device': 'cpu'}
+model_kwargs = {'device': 'cuda'}
 encode_kwargs = {'normalize_embeddings': False}
 
-embedding_function  = HuggingFaceEmbeddings(
-    model_name=model_name,
+embedding_function = HuggingFaceEmbeddings(
+    model_name=local_model_path,
     model_kwargs=model_kwargs,
     encode_kwargs=encode_kwargs
 )
@@ -46,7 +71,7 @@ embedding_function  = HuggingFaceEmbeddings(
 embedding_dim = len(embedding_function.embed_query(""))
 
 # Initialize the FAISS index with the correct dimensionality
-INDEX = faiss.IndexFlatL2(embedding_dim)
+index = faiss.IndexFlatL2(embedding_dim)
 
 def verify_channel_url(channel_url: str) -> bool:
     """Verify if the provided URL is a valid YouTube channel URL."""
@@ -179,16 +204,17 @@ def save_knowledge_base(index, metadata: list) -> None:
 def load_knowledge_base():
     """Load the FAISS index and metadata from disk."""
     if os.path.exists(INDEX_PATH) and os.path.exists(METADATA_PATH):
-        index = faiss.read_index(INDEX_PATH)
+        #index = faiss.read_index(INDEX_PATH)
+        index = faiss.IndexFlatL2(embedding_dim)
         with open(METADATA_PATH, "r") as f:
             metadata = json.load(f)
         print("Knowledge base loaded.")
         return index, metadata
     else:
         # Embed a sample text to check the dimensionality
-        sample_embeddings = embedding_function.embed_documents(["test text"])  # Embed sample text
-        embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
-        print(f"Embedding dimensionality: {embedding_dim}")  # Check the dimensionality
+        #sample_embeddings = embedding_function.embed_documents(["test text"])  # Embed sample text
+        #embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
+        #print(f"Embedding dimensionality: {embedding_dim}")  # Check the dimensionality
 
         # TODO: Adjust
         # Initialize the FAISS index with the correct dimensionality
@@ -266,7 +292,7 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list):
 
     index_to_docstore_id = {i: str(i) for i in range(len(metadata))}
 
-    logging.info(f"Number of vectors in FAISS index after updating knowledge base: {index.ntotal}")
+    #logging.info(f"Number of vectors in FAISS index after updating knowledge base: {index.ntotal}")
     return index, metadata, docstore, index_to_docstore_id
 
 # Step 6: Query the Knowledge Base
@@ -358,7 +384,8 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         if index is None or index.ntotal == 0:
             logging.info("Knowledge base is empty. Fetching new data...")
             # TODO: Check this value
-            index = faiss.IndexFlatL2(512)
+            #index = faiss.IndexFlatL2(512)
+            index = faiss.IndexFlatL2(embedding_dim)
             metadata = []
 
         # Update metadata with new video details
@@ -389,7 +416,6 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         logging.error(f"Error in query_endpoint: {str(e)}", exc_info=True)
         traceback.print_exc()  # This prints the full traceback to the console
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8001)
