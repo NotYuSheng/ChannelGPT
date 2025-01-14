@@ -67,7 +67,6 @@ embedding_function = HuggingFaceEmbeddings(
     encode_kwargs=encode_kwargs
 )
 
-
 # Embed a sample text to check the dimensionality
 sample_embeddings = embedding_function.embed_documents(["test text"])  # Embed sample text
 embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
@@ -146,7 +145,7 @@ def download_transcripts(video_ids: list, output_folder: str = "transcripts") ->
                 ],
                 check=True
             )
-            logging.info(f"Transcript downloaded: {output_file}")
+            #logging.info(f"Transcript downloaded: {output_file}")
         except subprocess.CalledProcessError:
             logging.error(f"Error downloading transcript for {video_id}", exc_info=True)
 
@@ -210,8 +209,7 @@ def save_knowledge_base(index, metadata: list) -> None:
 def load_knowledge_base():
     """Load the FAISS index and metadata from disk."""
     if os.path.exists(INDEX_PATH) and os.path.exists(METADATA_PATH):
-        #index = faiss.read_index(INDEX_PATH)
-        index = faiss.IndexFlatL2(embedding_dim)
+        index = faiss.read_index(INDEX_PATH)
         with open(METADATA_PATH, "r") as f:
             metadata = json.load(f)
         print("Knowledge base loaded.")
@@ -222,7 +220,6 @@ def load_knowledge_base():
         #embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
         #print(f"Embedding dimensionality: {embedding_dim}")  # Check the dimensionality
 
-        # TODO: Adjust
         # Initialize the FAISS index with the correct dimensionality
         index = faiss.IndexFlatL2(embedding_dim)
 
@@ -242,13 +239,24 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list):
             new_chunks = chunks
 
     if new_chunks:
-        logging.debug(f"Embedding {len(new_chunks)} new chunks...")
+        # Embed new texts using HuggingFaceEmbeddings
+        texts = [chunk["text"] for chunk in new_chunks]
+        logging.info(f"Generating embeddings for {len(texts)} new chunks...")
+        embeddings = np.array(embedding_function.embed_documents(texts)).astype('float32')
 
-        # TODO: Verify video details added properly
+        # Initialize the FAISS index if it's empty
+        if index.ntotal == 0:
+            embedding_dim = embeddings.shape[1]  # Get dimensionality from embeddings
+            index = faiss.IndexFlatL2(embedding_dim)
+            logging.info(f"Initialized FAISS index with dimensionality: {embedding_dim}")
+
+        # Add new embeddings to FAISS index
+        index.add(embeddings)
+        logging.info(f"Added {len(new_chunks)} vectors to FAISS index. Total vectors: {index.ntotal}")
+
         # Extend metadata
         metadata.extend(new_chunks)
-        logging.info(f"Added {len(new_chunks)} new chunks to knowledge base.")
-
+        logging.info(f"Added {len(new_chunks)} new chunks to metadata.")
     else:
         logging.info("No new data to add.")
 
@@ -265,7 +273,7 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list):
     docstore_data = {}
 
     # Use a for loop to populate the docstore data
-    for index, chunk in enumerate(metadata):
+    for i, chunk in enumerate(metadata):
         video_id = chunk["metadata"]["video_id"]
 
         # Check if the video_id exists in video_lookup and update title and channel
@@ -273,7 +281,7 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list):
             title = video_lookup[video_id]["title"]
             channel = video_lookup[video_id]["channel"]
 
-        docstore_data[str(index)] = Document(
+        docstore_data[str(i)] = Document(
             page_content=chunk["text"],
             metadata={
                 "video_id": video_id,
@@ -296,31 +304,36 @@ def query_and_analyze_knowledge_base(index, metadata: list, query: str, channel_
     try:
         # Filter metadata to only include entries from the specified channel handle
         filtered_metadata = []
-        logging.info(f"metadata: {metadata}")
-        logging.info(f"type(metadata): {type(metadata)}")
-        logging.info(f"len(metadata): {len(metadata)}")
-        logging.info(f"type(metadata[0]): {type(metadata[0])}")
-        logging.info(f"metadata[0].keys(): {metadata[0].keys()}")
-        logging.info(f"metadata[0]['metadata']: {metadata[0]['metadata']}")
+        logging.info(f"Filtering metadata for channel handle: {channel_handle}")
+        logging.info(f"Total metadata entries before filtering: {len(metadata)}")
+
         for entry in metadata:
             channel = entry["metadata"]["channel"]
-            logging.info(f"channel: {channel}")
+            #logging.info(f"channel: {channel}")
             if channel == channel_handle:
                 filtered_metadata.append(entry)
 
+        logging.info(f"Total metadata entries after filtering: {len(filtered_metadata)}")
+
         if not filtered_metadata:
+            logging.warning(f"No data found for channel: {channel_handle}")
             return f"No data found for channel: {channel_handle}"
 
         # Create the docstore and vectorstore
         docstore = InMemoryDocstore({
             str(i): Document(
                 page_content=entry["text"],
-                metadata={"video_id": entry["metadata"]["video_id"]}
+                metadata={
+                    "video_id": entry["metadata"]["video_id"],
+                    "title": entry["metadata"]["title"]
+                }
             )
             for i, entry in enumerate(filtered_metadata)
         })
+        logging.info(f"Docstore created with {len(docstore._dict)} entries.")
 
         index_to_docstore_id = {i: str(i) for i in range(len(filtered_metadata))}
+        logging.info(f"Index to docstore ID map created with {len(index_to_docstore_id)} entries.")
 
         # Create the FAISS vectorstore
         vectorstore = FAISS(
@@ -330,8 +343,15 @@ def query_and_analyze_knowledge_base(index, metadata: list, query: str, channel_
             index_to_docstore_id=index_to_docstore_id,
         )
 
-        retrieved_docs = vectorstore.similarity_search(query, k=3)
+        logging.info(f"Number of vectors in FAISS index: {vectorstore.index.ntotal}")
+        logging.info(f"Query: {query}")
+        retrieved_docs = vectorstore.similarity_search(query, k=10)
         context_with_links = []
+
+        if not retrieved_docs:  # Retry with k=1 if no documents are found
+            logging.info("No relevant documents found with k=10. Retrying with k=1...")
+            retrieved_docs = vectorstore.similarity_search(query, k=1)
+
         for doc in retrieved_docs:
             video_id = doc.metadata["video_id"]
             timestamp_str = doc.page_content.split("[")[1].split("]")[0]
@@ -339,10 +359,16 @@ def query_and_analyze_knowledge_base(index, metadata: list, query: str, channel_
             timestamp_seconds = int(timestamp_parts[0] * 3600 + timestamp_parts[1] * 60 + timestamp_parts[2])
             youtube_link = f"https://www.youtube.com/watch?v={video_id}&t={timestamp_seconds}s"
             context_with_links.append(f"{doc.page_content}\nLink: {youtube_link}")
+            logging.info(f"Appended context with link: {doc.page_content[:100]}... Link: {youtube_link}")
 
         context = "\n\n".join(context_with_links)
-        logging.info("Video Context:")
-        logging.info(context)
+
+        if context:
+            logging.info("Video Context:")
+            logging.info(context)
+        else:
+            logging.info("No context could be generated from the query.")
+
         return context
 
     except Exception as e:
@@ -366,7 +392,9 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         channel_url = f"https://www.youtube.com/@{query.channel_handle}"
         verify_channel_url(channel_url)
 
-        video_ids = get_latest_video_ids(channel_url, 10)
+        # TODO: Revert me
+        #video_ids = get_latest_video_ids(channel_url, 10)
+        video_ids = get_latest_video_ids(channel_url, 3)
         if not video_ids:
             return {"analysis": "No videos found for the provided channel URL."}
 
@@ -375,21 +403,6 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         logging.info(f"video_details: {video_details}")
 
         index, metadata = load_knowledge_base()
-
-        # TODO: Temp
-        if not isinstance(index, faiss.Index):
-            raise ValueError("392 The provided index is not a valid FAISS index instance.")
-
-        if index is None or index.ntotal == 0:
-            logging.info("Knowledge base is empty. Fetching new data...")
-            # TODO: Check this value
-            #index = faiss.IndexFlatL2(512)
-            index = faiss.IndexFlatL2(embedding_dim)
-            metadata = []
-
-        # TODO: Temp
-        if not isinstance(index, faiss.Index):
-            raise ValueError("403 The provided index is not a valid FAISS index instance.")
 
         # Update metadata with new video details
         #metadata.extend(video_details)
