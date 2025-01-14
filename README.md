@@ -10,7 +10,7 @@ To promote flexibility and reduce dependency on external services, the reliance 
 > This project is operational, but it's still in its early phases. Ongoing work is focused on bug fixes and performance improvements.
 
 <div align="center">
-  <img src="sample-img/DEMO.png" alt="Demo image" />
+  <img src="sample-img/Response-Sample.png" alt="Demo image" />
 </div>
 
 ## How It Works
