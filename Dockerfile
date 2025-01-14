@@ -16,9 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project into the container
 COPY . /app
 
-# Copy the template config file to config.py
-RUN cp config.template.py config.py
-
 # Expose the FastAPI port
 EXPOSE 8001
 
