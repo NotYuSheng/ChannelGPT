@@ -8,7 +8,7 @@ services:
     environment:
       - WEBUI_AUTH=false
     volumes:
-      - open-webui/data:/app/backend/data
+      - ./open-webui/data:/app/backend/data
     ollama:
     image: ollama/ollama:latest
     container_name: ollama
@@ -45,5 +45,3 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-volumes:
-  open-webui-data:
