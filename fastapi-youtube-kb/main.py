@@ -54,7 +54,7 @@ def initialize() -> Tuple[HuggingFaceEmbeddings, faiss.IndexFlatL2]:
         logging.info(f"Model already exists at {LOCAL_MODEL_PATH}. No action needed.")
 
     # Load embedding function
-    model_kwargs = {'device': 'cpu'}
+    model_kwargs = {'device': 'cuda'}
     encode_kwargs = {'normalize_embeddings': False}
     embedding_function = HuggingFaceEmbeddings(
         model_name=LOCAL_MODEL_PATH,
