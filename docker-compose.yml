@@ -10,15 +10,16 @@ services:
     volumes:
       - open-webui-data:/app/backend/data
   youtube-knowledgebase:
+    container_name: youtube-knowledgebase
     image: fastapi-youtube-knowledgebase:latest
     build:
-      context: .
+      context: ./fastapi-youtube-kb
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
     volumes:
-      - ./data:/app/data
-      - ./models:/app/models
+      - ./fastapi-youtube-kb/data:/app/data
+      - ./fastapi-youtube-kb/models:/app/models
     environment:
       - HOST=0.0.0.0
       - PORT=8001
