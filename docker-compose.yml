@@ -8,7 +8,22 @@ services:
     environment:
       - WEBUI_AUTH=false
     volumes:
-      - open-webui-data:/app/backend/data
+      - open-webui/data:/app/backend/data
+    ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - 11434:11434
+    volumes:
+      - ./ollama/dot_ollama:/root/.ollama
+    restart: always
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
   youtube-knowledgebase:
     container_name: youtube-knowledgebase
     image: fastapi-youtube-knowledgebase:latest
