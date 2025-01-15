@@ -97,5 +97,3 @@ This project is inspired by the original [ChannelGPT repository](https://github.
 - Replacing reliance on **OpenAI GPT4** with **vLLM** or **LM Studio**.
 - Replacing the **Google API Client Discovery** with **yt-dlp** for web scraping YouTube data.
 - Using **Hugging Face models** for embedding channel content.
-
-For a detailed presentation, refer to the [Google Slides](https://docs.google.com/presentation/d/1-fByxUlOslhKEuLHqnWeTu0N_QsHAox3wgATqQPI1qo/edit#slide=id.g32aa57a467b_0_68).
