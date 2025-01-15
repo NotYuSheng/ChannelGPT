@@ -1,12 +1,14 @@
 # ChannelGPT-Tool
-This project integrates **ChannelGPT** with **Open WebUI**, enabling natural language querying and analysis of YouTube channel content. 
 
-ChannelGPT-Tool is a custom-built application designed to provide advanced querying and analysis of YouTube channel content using AI-driven techniques. By combining powerful open-source models and tools, this project enables users to extract insights from YouTube videos without manually sifting through hours of content. Key features include independent deployment, seamless backend integration, and a user-friendly interface.
-
-<a href="#"><img alt="last-commit" src="https://img.shields.io/github/last-commit/NotYuSheng/ChannelGPT?color=red"></a>
+[![GitHub last commit](https://img.shields.io/github/last-commit/NotYuSheng/ChannelGPT-Tool?color=red)](#)
+[![Sphinx](https://img.shields.io/badge/Sphinx-000?logo=sphinx&logoColor=fff)](https://notyusheng.github.io/ChannelGPT-Tool/index.html)
 
 > [!WARNING]
 > This project is functional but still in its early phases. Ongoing work is focused on bug fixes and performance improvements.
+
+This project integrates **ChannelGPT** with **Open WebUI**, enabling natural language querying and analysis of YouTube channel content. 
+
+ChannelGPT-Tool is a custom-built application designed to provide advanced querying and analysis of YouTube channel content using AI-driven techniques. By combining powerful open-source models and tools, this project enables users to extract insights from YouTube videos without manually sifting through hours of content. Key features include independent deployment, seamless backend integration, and a user-friendly interface.
 
 <div align="center">
   <img src="sample-img/Response-Sample.png" alt="Demo image" />
