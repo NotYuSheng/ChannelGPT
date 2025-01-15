@@ -21,9 +21,6 @@ services:
       - ./fastapi-youtube-kb/data:/app/data
       - ./fastapi-youtube-kb/models:/app/models
     environment:
-      - HOST=0.0.0.0
-      - PORT=8001
-      - UVICORN_LOG_LEVEL=debug
       - PYTHONUNBUFFERED=1
     restart: unless-stopped
     deploy:
