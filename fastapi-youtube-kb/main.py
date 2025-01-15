@@ -1,24 +1,24 @@
-import os
+import concurrent.futures
 import json
+import os
+import logging
 import re
 import subprocess
 import traceback
-import logging
-import concurrent.futures
-from typing import Optional
+from typing import Optional, Tuple, Dict, List
 
-import uvicorn
 import faiss
 import numpy as np
-from webvtt import WebVTT
-from pydantic import BaseModel
+import uvicorn
 from fastapi import FastAPI, HTTPException, Body
-from langchain_core.documents import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
 from langchain_community.docstore.in_memory import InMemoryDocstore
+from langchain_community.vectorstores import FAISS
+from langchain_huggingface import HuggingFaceEmbeddings
+from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer, models
+from webvtt import WebVTT
 
 # Configure logging to output to stdout
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
@@ -30,55 +30,39 @@ INDEX_TO_DOCSTORE_ID_PATH = "/app/data/index_to_docstore_id.json"
 DOCSTORE_PATH = "/app/data/docstore.json"
 
 # Define paths
-model_name = "BAAI/bge-base-en-v1.5"
-#model_name = "BAAI/bge-large-en-v1.5"
-#model_name = "sentence-transformers/all-mpnet-base-v2"
-#model_name = "sentence-transformers/distiluse-base-multilingual-cased-v1"
+#MODEL_NAME = "BAAI/bge-base-en-v1.5"
+MODEL_NAME = "sentence-transformers/distiluse-base-multilingual-cased-v1"
 # Local directory to save the model
-local_model_path = "./models/bge-base-en-v1.5"
+#LOCAL_MODEL_PATH = "./models/bge-base-en-v1.5"
+LOCAL_MODEL_PATH = "./models/distiluse-base-multilingual-cased-v1"
 
-# Check if the model is already saved locally
-if not os.path.exists(local_model_path):
-    logging.info(f"Model not found at {local_model_path}. Downloading and converting...")
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
-    # Load the Hugging Face model and tokenizer
-    word_embedding_model = models.Transformer(model_name, max_seq_length=512)
-
-    # Apply mean pooling to get sentence embeddings
+# Check if the model is saved locally; download if necessary
+if not os.path.exists(LOCAL_MODEL_PATH):
+    logging.info(f"Model not found at {LOCAL_MODEL_PATH}. Downloading and converting...")
+    word_embedding_model = models.Transformer(MODEL_NAME, max_seq_length=512)
     pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
-
-    # Create a SentenceTransformer model with the transformer and pooling modules
     transformer_model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-
-    # Save the model in the sentence-transformers format
-    transformer_model.save(local_model_path)
-
-    logging.info(f"Model successfully saved at {local_model_path}")
+    transformer_model.save(LOCAL_MODEL_PATH)
+    logging.info(f"Model successfully saved at {LOCAL_MODEL_PATH}")
 else:
-    logging.info(f"Model already exists at {local_model_path}. No action needed.")
+    logging.info(f"Model already exists at {LOCAL_MODEL_PATH}. No action needed.")
 
-# Load embedding model
-local_model_path = "./models/bge-base-en-v1.5"
+# Load embedding function
 model_kwargs = {'device': 'cpu'}
-#model_kwargs = {'device': 'cuda'}
 encode_kwargs = {'normalize_embeddings': False}
-
 embedding_function = HuggingFaceEmbeddings(
-    model_name=local_model_path,
+    model_name=LOCAL_MODEL_PATH,
     model_kwargs=model_kwargs,
     encode_kwargs=encode_kwargs
 )
 
-# Embed a sample text to check the dimensionality
-sample_embeddings = embedding_function.embed_documents(["test text"])  # Embed sample text
-embedding_dim = len(sample_embeddings[0])  # Get the dimension of the first embedding
-logging.info(f"Embedding dimensionality: {embedding_dim}")  # Check the dimensionality
-
-# Get the dimensionality by embedding a minimal valid input (empty string)
-#embedding_dim = len(embedding_function.embed_query(""))
-
-# Initialize the FAISS index with the correct dimensionality
-index = faiss.IndexFlatL2(embedding_dim)
+# Initialize embedding_dim
+sample_embeddings = embedding_function.embed_documents(["test text"])
+embedding_dim = len(sample_embeddings[0])
+logging.info(f"Embedding dimensionality: {embedding_dim}")
 
 def verify_channel_url(channel_url: str) -> bool:
     """Verify if the provided URL is a valid YouTube channel URL."""
@@ -109,7 +93,6 @@ def get_video_details(video_ids: list, channel_handle: str) -> list:
             continue
     return video_details
 
-# Step 1: Fetch Latest Video IDs using yt-dlp
 def get_latest_video_ids(channel_url: str, num_videos: int = 10) -> list:
     """Fetch the latest video IDs from a YouTube channel using yt-dlp."""
     try:
@@ -127,7 +110,6 @@ def get_latest_video_ids(channel_url: str, num_videos: int = 10) -> list:
         logging.error(f"Error fetching video IDs: {e.stderr}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch video IDs from the channel.")
 
-# Step 2: Download Transcripts with Multithreading
 def download_transcripts(video_ids: list, output_folder: str = "transcripts") -> None:
     """Download transcripts for given video IDs using yt-dlp."""
     os.makedirs(output_folder, exist_ok=True)
@@ -154,7 +136,6 @@ def download_transcripts(video_ids: list, output_folder: str = "transcripts") ->
     with concurrent.futures.ThreadPoolExecutor() as executor:
         executor.map(download_video, video_ids)
 
-# Step 3: Reformat Transcripts
 def reformat_transcripts(input_folder: str, output_folder: str) -> None:
     """Reformat VTT transcripts to plain text files with timestamps."""
     os.makedirs(output_folder, exist_ok=True)
@@ -165,10 +146,9 @@ def reformat_transcripts(input_folder: str, output_folder: str) -> None:
             with open(output_path, "w") as output:
                 for caption in WebVTT().read(input_path):
                     output.write("[" + caption.start + "] " + caption.text.replace('\n', ' ') + "\n")
-            print(f"Reformatted: {output_path}")
+            logging.info(f"Reformatted: {output_path}")
 
-# Step 4: Chunkify Transcripts
-def chunkify_transcripts(folder: str, video_details: list) -> list:
+def chunkify_transcripts(folder: str, video_details: list) -> List[Dict[str, dict | str]]:
     """Chunkify reformatted transcripts into smaller segments for embedding."""
     chunks = []
     # Initialize an empty dictionary to store the video details
@@ -201,8 +181,7 @@ def chunkify_transcripts(folder: str, video_details: list) -> list:
                 })
     return chunks
 
-# Step 5: Knowledge Base Management
-def save_knowledge_base(index, metadata: list, index_to_docstore_id: dict, docstore: dict) -> None:
+def save_knowledge_base(index: faiss.IndexFlatL2, metadata: List[dict], index_to_docstore_id: Dict[int, str], docstore: InMemoryDocstore) -> None:
     """Save the FAISS index, metadata, index_to_docstore_id, and docstore to disk."""
     faiss.write_index(index, INDEX_PATH)
     with open(METADATA_PATH, "w") as f:
@@ -215,9 +194,9 @@ def save_knowledge_base(index, metadata: list, index_to_docstore_id: dict, docst
     with open(DOCSTORE_PATH, "w") as f:
         json.dump(serialized_docstore, f)
     
-    print("Knowledge base saved.")
+    logging.info("Knowledge base saved.")
 
-def load_knowledge_base():
+def load_knowledge_base() -> Tuple[faiss.IndexFlatL2, List[dict], Dict[int, str], InMemoryDocstore]:
     """Load the FAISS index, metadata, index_to_docstore_id, and docstore from disk."""
     if all(os.path.exists(path) for path in [INDEX_PATH, METADATA_PATH, INDEX_TO_DOCSTORE_ID_PATH, DOCSTORE_PATH]):
         index = faiss.read_index(INDEX_PATH)
@@ -232,7 +211,7 @@ def load_knowledge_base():
         docstore_data = {k: Document(page_content=v["page_content"], metadata=v["metadata"]) for k, v in serialized_docstore.items()}
         docstore = InMemoryDocstore(docstore_data)
         
-        print("Knowledge base loaded.")
+        logging.info("Knowledge base loaded.")
         return index, metadata, index_to_docstore_id, docstore
     else:
         # Initialize a new knowledge base if no files are found
@@ -240,10 +219,17 @@ def load_knowledge_base():
         metadata = []
         index_to_docstore_id = {}
         docstore = InMemoryDocstore({})
-        print("No existing knowledge base found. Initialized a new one.")
+        logging.info("No existing knowledge base found. Initialized a new one.")
         return index, metadata, index_to_docstore_id, docstore
 
-def update_knowledge_base(chunks, index, metadata: list, video_details: list, docstore: InMemoryDocstore, index_to_docstore_id: dict):
+def update_knowledge_base(
+    chunks: List[Dict[str, dict | str]], 
+    index: faiss.IndexFlatL2, 
+    metadata: List[dict], 
+    index_to_docstore_id: Dict[int, str],
+    docstore: InMemoryDocstore, 
+    video_details: list    
+) -> Tuple[faiss.IndexFlatL2, list, dict, InMemoryDocstore]:
     """Update the FAISS index with new data."""
     # Extract existing video IDs from metadata
     existing_ids = {entry["metadata"]["video_id"] for entry in metadata}
@@ -303,10 +289,9 @@ def update_knowledge_base(chunks, index, metadata: list, video_details: list, do
     # Update index_to_docstore_id with new mappings
     index_to_docstore_id.update({index.ntotal - len(new_chunks) + i: str(len(metadata) - len(new_chunks) + i) for i in range(len(new_chunks))})
 
-    return index, metadata, docstore, index_to_docstore_id
+    return index, metadata, index_to_docstore_id, docstore
 
-# Step 6: Query the Knowledge Base
-def query_and_analyze_knowledge_base(index, metadata: list, query: str, channel_handle: str) -> str:
+def query_and_analyze_knowledge_base(index: faiss.IndexFlatL2, metadata: List[dict], query: str, channel_handle: str) -> str:
     """Query the knowledge base and analyze the results, filtering by channel handle."""
     try:
         # Filter metadata to only include entries from the specified channel handle
@@ -400,9 +385,7 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         channel_url = f"https://www.youtube.com/@{query.channel_handle}"
         verify_channel_url(channel_url)
 
-        # TODO: Revert me
-        #video_ids = get_latest_video_ids(channel_url, 10)
-        video_ids = get_latest_video_ids(channel_url, 3)
+        video_ids = get_latest_video_ids(channel_url, 10)
         if not video_ids:
             return {"analysis": "No videos found for the provided channel URL."}
 
@@ -412,19 +395,13 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
 
         index, metadata, index_to_docstore_id, docstore = load_knowledge_base()
 
-        # Update metadata with new video details
-        #metadata.extend(video_details)
-
-        # Log the updated metadata for verification
-        #logging.info(f"Updated metadata: {metadata}")
-
         download_transcripts(video_ids)
         reformat_transcripts("transcripts", "transcripts_formatted")
         chunks = chunkify_transcripts("transcripts_formatted", video_details)
         logging.info(f"Number of chunks created: {len(chunks)}")
         logging.info(f"First 5 chunks: {chunks[:5]}")
 
-        index, metadata, docstore, index_to_docstore_id = update_knowledge_base(chunks, index, metadata, video_details, docstore, index_to_docstore_id)
+        index, metadata, index_to_docstore_id, docstore = update_knowledge_base(chunks, index, metadata, index_to_docstore_id, docstore, video_details)
         
         save_knowledge_base(index, metadata, index_to_docstore_id, docstore)
 
@@ -442,4 +419,5 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    # Remove uvicorn.run() and rely on Docker CMD
+    pass

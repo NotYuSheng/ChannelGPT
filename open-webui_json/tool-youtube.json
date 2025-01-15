@@ -1,0 +1,36 @@
+[
+    {
+        "id": "youtube",
+        "user_id": "3162879e-99ca-436c-b9f0-54d984031e28",
+        "name": "youtube_knowledge",
+        "content": "title: \"YouTube Knowledge Base Tool\"\ndescription: \"This tool converts YouTube channel videos into a knowledge base and allows querying using natural language.\"\n\nimport requests\nimport os\nfrom pydantic import BaseModel\n\n\nclass Tools:\n    class Valves(BaseModel):\n        api_url: str = \"http://192.168.133.130:8001/query\"\n\n    def __init__(self):\n        self.valves = self.Valves()\n        pass\n\n    def query_knowledge_base(self, channel_handle: str, query_text: str) -> str:\n        \"\"\"\n        When given a YouTube channel handle, query knowledge base for video contexts\n        \"\"\"\n        api_url = self.valves.api_url\n        payload = {\"text\": query_text, \"channel_handle\": channel_handle}\n\n        try:\n            response = requests.post(api_url, json=payload)\n            response.raise_for_status()\n            result = response.json()\n            return result.get(\"analysis\")\n        except Exception as e:\n            return f\"Error: {str(e)}\"\n",
+        "specs": [
+            {
+                "name": "query_knowledge_base",
+                "description": "When given a YouTube channel handle, query knowledge base for video contexts",
+                "parameters": {
+                    "properties": {
+                        "channel_handle": {
+                            "type": "string"
+                        },
+                        "query_text": {
+                            "type": "string"
+                        }
+                    },
+                    "required": [
+                        "channel_handle",
+                        "query_text"
+                    ],
+                    "type": "object"
+                }
+            }
+        ],
+        "meta": {
+            "description": "This tool converts YouTube channel videos into a knowledge base and allows querying using natural language.",
+            "manifest": {}
+        },
+        "access_control": null,
+        "updated_at": 1736861371,
+        "created_at": 1736428211
+    }
+]

@@ -12,6 +12,33 @@ ChannelGPT-Tool is a custom-built application designed to provide advanced query
   <img src="sample-img/Response-Sample.png" alt="Demo image" />
 </div>
 
+## Usage
+1.  Clone this repository and navigate to project folder
+```
+git clone https://github.com/NotYuSheng/ChannelGPT-Tool.git
+cd ChannelGPT-Tool
+```
+
+2.  Build the Docker images:
+```
+docker compose build
+```
+
+3.  Run images
+```
+docker compose up -d
+```
+
+4.  Access Open-WebUI webpage from host
+```
+<host-ip>:8080
+```
+
+Access FastApi docs page from
+```
+<host-ip>:8000/docs
+```
+
 ## How It Works
 
 ### 1. User Interaction with Open WebUI

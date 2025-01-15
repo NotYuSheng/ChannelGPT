@@ -1,4 +1,4 @@
 # Ignore all volumes
-data/*
-models/*
+fastapi-youtube-kb/data/*
+fastapi-youtube-kb/models/*
 open-webui-data
