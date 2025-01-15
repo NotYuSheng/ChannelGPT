@@ -5,7 +5,7 @@ import logging
 import re
 import subprocess
 import traceback
-from typing import Optional
+from typing import Optional, Tuple, Dict, List
 
 import faiss
 import numpy as np
@@ -36,39 +36,33 @@ MODEL_NAME = "sentence-transformers/distiluse-base-multilingual-cased-v1"
 #LOCAL_MODEL_PATH = "./models/bge-base-en-v1.5"
 LOCAL_MODEL_PATH = "./models/distiluse-base-multilingual-cased-v1"
 
-def initialize() -> Tuple[HuggingFaceEmbeddings, faiss.IndexFlatL2]:
-    """Initialize logging, model, embedding function, and FAISS index."""
-    
-    # Configure logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
-    # Check if the model is saved locally; download if necessary
-    if not os.path.exists(LOCAL_MODEL_PATH):
-        logging.info(f"Model not found at {LOCAL_MODEL_PATH}. Downloading and converting...")
-        word_embedding_model = models.Transformer(MODEL_NAME, max_seq_length=512)
-        pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
-        transformer_model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-        transformer_model.save(LOCAL_MODEL_PATH)
-        logging.info(f"Model successfully saved at {LOCAL_MODEL_PATH}")
-    else:
-        logging.info(f"Model already exists at {LOCAL_MODEL_PATH}. No action needed.")
+# Check if the model is saved locally; download if necessary
+if not os.path.exists(LOCAL_MODEL_PATH):
+    logging.info(f"Model not found at {LOCAL_MODEL_PATH}. Downloading and converting...")
+    word_embedding_model = models.Transformer(MODEL_NAME, max_seq_length=512)
+    pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
+    transformer_model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+    transformer_model.save(LOCAL_MODEL_PATH)
+    logging.info(f"Model successfully saved at {LOCAL_MODEL_PATH}")
+else:
+    logging.info(f"Model already exists at {LOCAL_MODEL_PATH}. No action needed.")
 
-    # Load embedding function
-    model_kwargs = {'device': 'cuda'}
-    encode_kwargs = {'normalize_embeddings': False}
-    embedding_function = HuggingFaceEmbeddings(
-        model_name=LOCAL_MODEL_PATH,
-        model_kwargs=model_kwargs,
-        encode_kwargs=encode_kwargs
-    )
+# Load embedding function
+model_kwargs = {'device': 'cpu'}
+encode_kwargs = {'normalize_embeddings': False}
+embedding_function = HuggingFaceEmbeddings(
+    model_name=LOCAL_MODEL_PATH,
+    model_kwargs=model_kwargs,
+    encode_kwargs=encode_kwargs
+)
 
-    # Initialize FAISS index
-    sample_embeddings = embedding_function.embed_documents(["test text"])
-    embedding_dim = len(sample_embeddings[0])
-    logging.info(f"Embedding dimensionality: {embedding_dim}")
-    index = faiss.IndexFlatL2(embedding_dim)
-
-    return embedding_function, index
+# Initialize embedding_dim
+sample_embeddings = embedding_function.embed_documents(["test text"])
+embedding_dim = len(sample_embeddings[0])
+logging.info(f"Embedding dimensionality: {embedding_dim}")
 
 def verify_channel_url(channel_url: str) -> bool:
     """Verify if the provided URL is a valid YouTube channel URL."""
@@ -425,6 +419,5 @@ async def query_endpoint(query: Query = Body(...)) -> dict:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 if __name__ == "__main__":
-    embedding_function, index = initialize()
     # Remove uvicorn.run() and rely on Docker CMD
     pass
