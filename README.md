@@ -74,7 +74,7 @@ Access FastApi docs page from
 ## Features
 
 - **Ask Questions Easily:** Users can type questions in plain language, and the system will provide answers based on YouTube channel content.
-- **No Paid Services Needed:** The system uses free, open-source models like **vLLM**, **LM Studio**, and **Hugging Face models**, so there's no need to rely on expensive APIs.
+- **No Paid Services Needed:** The system uses free, open-source models from **HuggingFace**, so there's no need to rely on expensive APIs.
 - **Automatic Data Collection:** Video information is automatically gathered from YouTube using **yt-dlp**.
 - **Backend Server with Knowledge Base:** The backend server stores and processes YouTube data, making it fast and easy to find answers.
 - **Web Interface for Users:** The **Open WebUI** provides a simple interface that anyone can use to ask questions and get answers.
@@ -94,6 +94,6 @@ Access FastApi docs page from
 This project is inspired by the original [ChannelGPT repository](https://github.com/a2ashraf/ChannelGPT) by [a2ashraf](https://github.com/a2ashraf). Significant modifications have been made, including:
 
 - Replacing the **Gradio frontend** with **Open WebUI**.
-- Replacing reliance on **OpenAI GPT4** with **vLLM** or **LM Studio**.
+- Replacing reliance on **OpenAI GPT4** with local LLM server compatible with Open-WebUI like **Ollama**, **vLLM** or **LM Studio**.
 - Replacing the **Google API Client Discovery** with **yt-dlp** for web scraping YouTube data.
 - Using **Hugging Face models** for embedding channel content.
