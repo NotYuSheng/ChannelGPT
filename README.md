@@ -38,6 +38,13 @@ Access FastApi docs page from
 ```
 <host-ip>:8000/docs
 ```
+5. Import the Model and Tool in Open-WebUI
+After accessing the Open-WebUI interface, navigate to the `Workspace` tab. Use the following JSON files to import the model and tool:
+
+- Model: `open-webui_json/channelgpt_model.json`
+- Tool: `open-webui_json/tool-youtube.json`
+
+This will configure the model and tool necessary for querying YouTube channel content.
 
 ## How It Works
 
