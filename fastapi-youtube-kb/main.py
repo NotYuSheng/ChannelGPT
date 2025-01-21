@@ -229,7 +229,7 @@ def chunkify_transcripts(folder: str, video_details: list) -> List[Dict[str, dic
                 })
     return chunks
 
-def save_knowledge_base(index: faiss.IndexFlatL2, metadata: List[dict], index_to_docstore_id: Dict[int, str], docstore: InMemoryDocstore) -> None:
+def save_knowledge_base(index: faiss.IndexHNSW, metadata: List[dict], index_to_docstore_id: Dict[int, str], docstore: InMemoryDocstore) -> None:
     """Save the FAISS index, metadata, index_to_docstore_id, and docstore to disk."""
     faiss.write_index(index, INDEX_PATH)
     with open(METADATA_PATH, "w") as f:
@@ -244,7 +244,7 @@ def save_knowledge_base(index: faiss.IndexFlatL2, metadata: List[dict], index_to
     
     logging.info("Knowledge base saved.")
 
-def load_knowledge_base() -> Tuple[faiss.IndexFlatL2, List[dict], Dict[int, str], InMemoryDocstore]:
+def load_knowledge_base() -> Tuple[faiss.IndexHNSW, List[dict], Dict[int, str], InMemoryDocstore]:
     """Load the FAISS index, metadata, index_to_docstore_id, and docstore from disk."""
     if all(os.path.exists(path) for path in [INDEX_PATH, METADATA_PATH, INDEX_TO_DOCSTORE_ID_PATH, DOCSTORE_PATH]):
         index = faiss.read_index(INDEX_PATH)
@@ -263,7 +263,7 @@ def load_knowledge_base() -> Tuple[faiss.IndexFlatL2, List[dict], Dict[int, str]
         return index, metadata, index_to_docstore_id, docstore
     else:
         # Initialize a new knowledge base if no files are found
-        index = faiss.IndexFlatL2(embedding_dim)
+        index = faiss.IndexHNSW(embedding_dim)
         metadata = []
         index_to_docstore_id = {}
         docstore = InMemoryDocstore({})
@@ -272,12 +272,12 @@ def load_knowledge_base() -> Tuple[faiss.IndexFlatL2, List[dict], Dict[int, str]
 
 def update_knowledge_base(
     chunks: List[Dict[str, dict | str]], 
-    index: faiss.IndexFlatL2, 
+    index: faiss.IndexHNSW, 
     metadata: List[dict], 
     index_to_docstore_id: Dict[int, str],
     docstore: InMemoryDocstore, 
     video_details: list    
-) -> Tuple[faiss.IndexFlatL2, list, dict, InMemoryDocstore]:
+) -> Tuple[faiss.IndexHNSW, list, dict, InMemoryDocstore]:
     """Update the FAISS index with new data."""
     # Extract existing video IDs from metadata
     existing_ids = {entry["metadata"]["video_id"] for entry in metadata}
@@ -297,7 +297,7 @@ def update_knowledge_base(
         # Initialize the FAISS index if it's empty
         if index.ntotal == 0:
             embedding_dim = embeddings.shape[1]  # Get dimensionality from embeddings
-            index = faiss.IndexFlatL2(embedding_dim)
+            index = faiss.IndexHNSW(embedding_dim)
             logging.info(f"Initialized FAISS index with dimensionality: {embedding_dim}")
 
         # Add new embeddings to FAISS index
@@ -341,7 +341,7 @@ def update_knowledge_base(
 
     return index, metadata, index_to_docstore_id, docstore
 
-def query_and_analyze_knowledge_base(index: faiss.IndexFlatL2, metadata: List[dict], query: str, channel_handle: str) -> str:
+def query_and_analyze_knowledge_base(index: faiss.IndexHNSW, metadata: List[dict], query: str, channel_handle: str) -> str:
     """Query the knowledge base and analyze the results, filtering by channel handle."""
     try:
         # Filter metadata to only include entries from the specified channel handle
@@ -411,7 +411,7 @@ def query_and_analyze_knowledge_base(index: faiss.IndexFlatL2, metadata: List[di
             youtube_link = f"https://www.youtube.com/watch?v={video_id}&t={timestamp_seconds}s"
             
             # Include upload date in the formatted output
-            context_with_links.append(f"{doc.page_content}\nUpload Date: {upload_date_formatted}\nLink: {youtube_link}")
+            context_with_links.append(f"Title: {title}\n{doc.page_content}\nUpload Date: {upload_date_formatted}\nLink: {youtube_link}")
             
             # Log the title, upload date, and link
             logging.info(f"Title: {title}\nUpload Date: {upload_date_formatted}\n{doc.page_content}\nLink: {youtube_link}")
