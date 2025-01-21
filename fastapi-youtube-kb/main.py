@@ -51,7 +51,7 @@ else:
     logging.info(f"Model already exists at {LOCAL_MODEL_PATH}. No action needed.")
 
 # Load embedding function
-model_kwargs = {'device': 'cpu'}
+model_kwargs = {'device': 'cuda'}
 encode_kwargs = {'normalize_embeddings': False}
 embedding_function = HuggingFaceEmbeddings(
     model_name=LOCAL_MODEL_PATH,
@@ -389,12 +389,10 @@ def query_and_analyze_knowledge_base(index: faiss.IndexHNSW, metadata: List[dict
 
         logging.info(f"Number of vectors in FAISS index: {vectorstore.index.ntotal}")
         logging.info(f"Query: {query}")
-        retrieved_docs = vectorstore.similarity_search(query, k=10)
+        
+        # Perform similarity search to retrieve the top-k most similar documents
+        retrieved_docs = vectorstore.similarity_search(query, k=5) # k specifies the number of results to return
         context_with_links = []
-
-        if not retrieved_docs:  # Retry with k=1 if no documents are found
-            logging.info("No relevant documents found with k=10. Retrying with k=1...")
-            retrieved_docs = vectorstore.similarity_search(query, k=1)
 
         for doc in retrieved_docs:
             video_id = doc.metadata["video_id"]
