@@ -9,7 +9,7 @@ from typing import Optional, Tuple, Dict, List
 
 import faiss
 import numpy as np
-import uvicorn
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Body
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
@@ -73,21 +73,31 @@ def verify_channel_url(channel_url: str) -> bool:
     return True
 
 def get_video_details(video_ids: list, channel_handle: str) -> list:
-    """Fetch video titles and channel handles using yt-dlp."""
+    """Fetch video titles, upload dates, and channel handles using yt-dlp."""
     video_details = []
     for video_id in video_ids:
         video_url = f"https://www.youtube.com/watch?v={video_id}"
         try:
             result = subprocess.run(
-                ["yt-dlp", "--get-title", video_url],
+                ["yt-dlp", 
+                 "--print", "title", 
+                 "--print", "upload_date", 
+                 video_url],
                 capture_output=True,
                 text=True,
                 check=True
             )
             output_lines = result.stdout.strip().split("\n")
             video_title = output_lines[0]
-            video_details.append({"video_id": video_id, "title": video_title, "channel": channel_handle})
-            logging.info(f"Fetched details for video ID {video_id}: Title: {video_title}, Channel: {channel_handle}")
+            upload_date = output_lines[1]
+            video_details.append({
+                "video_id": video_id,
+                "title": video_title,
+                "upload_date": upload_date,
+                "channel_handle": channel_handle
+            })
+            logging.info(f"Fetched details for video ID {video_id}: Title: {video_title}, "
+                         f"Upload Date: {upload_date}, channel_handle: {channel_handle}")
         except subprocess.CalledProcessError as e:
             logging.error(f"Error fetching details for {video_id}: {e.stderr}", exc_info=True)
             continue
@@ -110,31 +120,68 @@ def get_latest_video_ids(channel_url: str, num_videos: int = 10) -> list:
         logging.error(f"Error fetching video IDs: {e.stderr}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to fetch video IDs from the channel.")
 
+def clean_transcript(input_file: str, output_file: str) -> None:
+    """Clean up overlapping and repeated content in the transcript, retaining timestamps."""
+    try:
+        with open(input_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        cleaned_lines = []
+        last_text = ""
+        timestamp_pattern = re.compile(r"(\d{2}:\d{2}:\d{2}\.\d{3})")
+
+        for line in lines:
+            # Extract timestamp and content
+            match = timestamp_pattern.search(line)
+            if match:
+                timestamp = match.group(1)
+                text = line.replace(timestamp, "").strip()
+
+                # Add line if it's not a repetition
+                if text and text != last_text:
+                    cleaned_lines.append(f"{timestamp} {text}")
+                    last_text = text
+
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write("\n".join(cleaned_lines))
+
+        logging.info(f"Cleaned transcript saved to: {output_file}")
+
+    except Exception as e:
+        logging.error(f"Error cleaning transcript: {input_file}", exc_info=True)
+
 def download_transcripts(video_ids: list, output_folder: str = "transcripts") -> None:
-    """Download transcripts for given video IDs using yt-dlp."""
+    """Download transcripts for given video IDs using yt-dlp and clean them."""
     os.makedirs(output_folder, exist_ok=True)
 
-    def download_video(video_id):
+    def download_and_clean(video_id):
         video_url = f"https://www.youtube.com/watch?v={video_id}"
-        output_file = os.path.join(output_folder, f"{video_id}.vtt")
+        raw_output_file = os.path.join(output_folder, f"{video_id}.vtt")
+        cleaned_output_file = os.path.join(output_folder, f"{video_id}_cleaned.txt")
+        
         try:
+            # Download transcript
             subprocess.run(
                 [
                     "yt-dlp",
                     "--write-auto-subs",
                     "--skip-download",
                     "--sub-lang", "en",
-                    "-o", output_file,
+                    "-o", raw_output_file,
                     video_url
                 ],
                 check=True
             )
-            #logging.info(f"Transcript downloaded: {output_file}")
+            logging.info(f"Transcript downloaded: {raw_output_file}")
+            
+            # Clean transcript
+            clean_transcript(raw_output_file, cleaned_output_file)
+        
         except subprocess.CalledProcessError:
             logging.error(f"Error downloading transcript for {video_id}", exc_info=True)
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        executor.map(download_video, video_ids)
+        executor.map(download_and_clean, video_ids)
 
 def reformat_transcripts(input_folder: str, output_folder: str) -> None:
     """Reformat VTT transcripts to plain text files with timestamps."""
@@ -176,7 +223,8 @@ def chunkify_transcripts(folder: str, video_details: list) -> List[Dict[str, dic
                     "metadata": {
                         "video_id": video_id,
                         "title": video_details_map[video_id]["title"],
-                        "channel": video_details_map[video_id]["channel"]
+                        "upload_date": video_details_map[video_id]["upload_date"],
+                        "channel_handle": video_details_map[video_id]["channel_handle"]
                     }
                 })
     return chunks
@@ -263,7 +311,7 @@ def update_knowledge_base(
         logging.info("No new data to add.")
 
     # Create a lookup dictionary for video details by video_id
-    video_lookup = {detail["video_id"]: {"title": detail["title"], "channel": detail["channel"]} for detail in video_details}
+    video_lookup = {detail["video_id"]: {"title": detail["title"], "upload_date": detail["upload_date"], "channel_handle": detail["channel_handle"]} for detail in video_details}
 
     # Update docstore with new chunks
     docstore_data = docstore._dict.copy()
@@ -273,13 +321,15 @@ def update_knowledge_base(
         video_id = chunk["metadata"]["video_id"]
         if video_id in video_lookup:
             title = video_lookup[video_id]["title"]
-            channel = video_lookup[video_id]["channel"]
+            upload_date = video_lookup[video_id]["upload_date"]
+            channel_handle = video_lookup[video_id]["channel_handle"]
             docstore_data[str(starting_index + i)] = Document(
                 page_content=chunk["text"],
                 metadata={
                     "video_id": video_id,
                     "title": title,
-                    "channel": channel
+                    "upload_date": upload_date,
+                    "channel_handle": channel_handle
                 }
             )
 
@@ -300,7 +350,7 @@ def query_and_analyze_knowledge_base(index: faiss.IndexFlatL2, metadata: List[di
         logging.info(f"Total metadata entries before filtering: {len(metadata)}")
 
         for entry in metadata:
-            channel = entry["metadata"]["channel"]
+            channel = entry["metadata"]["channel_handle"]
             #logging.info(f"channel: {channel}")
             if channel == channel_handle:
                 filtered_metadata.append(entry)
@@ -316,8 +366,10 @@ def query_and_analyze_knowledge_base(index: faiss.IndexFlatL2, metadata: List[di
             str(i): Document(
                 page_content=entry["text"],
                 metadata={
+                    "channel_handle": entry["metadata"]["channel_handle"],
                     "video_id": entry["metadata"]["video_id"],
-                    "title": entry["metadata"]["title"]
+                    "title": entry["metadata"]["title"],
+                    "upload_date": entry["metadata"]["upload_date"]
                 }
             )
             for i, entry in enumerate(filtered_metadata)
@@ -347,12 +399,22 @@ def query_and_analyze_knowledge_base(index: faiss.IndexFlatL2, metadata: List[di
         for doc in retrieved_docs:
             video_id = doc.metadata["video_id"]
             title = doc.metadata["title"]
+            upload_date = doc.metadata["upload_date"]
+            
+            # Reformat the upload date
+            upload_date_formatted = datetime.strptime(upload_date, "%Y%m%d").strftime("%B %d, %Y")
+    
+            
             timestamp_str = doc.page_content.split("[")[1].split("]")[0]
             timestamp_parts = list(map(float, timestamp_str.split(":")))
             timestamp_seconds = int(timestamp_parts[0] * 3600 + timestamp_parts[1] * 60 + timestamp_parts[2])
             youtube_link = f"https://www.youtube.com/watch?v={video_id}&t={timestamp_seconds}s"
-            context_with_links.append(f"{doc.page_content}\nLink: {youtube_link}")
-            logging.info(f"Title: {title}\n{doc.page_content}\nLink: {youtube_link}")
+            
+            # Include upload date in the formatted output
+            context_with_links.append(f"{doc.page_content}\nUpload Date: {upload_date_formatted}\nLink: {youtube_link}")
+            
+            # Log the title, upload date, and link
+            logging.info(f"Title: {title}\nUpload Date: {upload_date_formatted}\n{doc.page_content}\nLink: {youtube_link}")
 
         context = "\n\n".join(context_with_links)
 
