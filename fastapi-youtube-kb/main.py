@@ -167,16 +167,19 @@ def download_transcripts(video_ids: list, output_folder: str = "transcripts") ->
                     "--write-auto-subs",
                     "--skip-download",
                     "--sub-lang", "en",
-                    "-o", raw_output_file,
+                    "-o", os.path.join(output_folder, f"{video_id}"),
                     video_url
                 ],
                 check=True
             )
             logging.info(f"Transcript downloaded: {raw_output_file}")
             
-            # Clean transcript
-            clean_transcript(raw_output_file, cleaned_output_file)
-        
+            # Check if the file exists before cleaning
+            if os.path.exists(raw_output_file):
+                clean_transcript(raw_output_file, cleaned_output_file)
+            else:
+                logging.error(f"Transcript file not found: {raw_output_file}")
+
         except subprocess.CalledProcessError:
             logging.error(f"Error downloading transcript for {video_id}", exc_info=True)
 
@@ -205,7 +208,7 @@ def chunkify_transcripts(folder: str, video_details: list) -> List[Dict[str, dic
     for detail in video_details:
         # Extract the video_id from the current detail
         video_id = detail["video_id"]
-        
+
         # Add the detail to the dictionary with video_id as the key
         video_details_map[video_id] = detail
 
@@ -216,7 +219,7 @@ def chunkify_transcripts(folder: str, video_details: list) -> List[Dict[str, dic
             with open(os.path.join(folder, file_name), "r") as file:
                 transcript = file.read()
             splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-            
+
             for chunk_text in splitter.split_text(transcript):
                 chunks.append({
                     "text": chunk_text,
@@ -229,7 +232,7 @@ def chunkify_transcripts(folder: str, video_details: list) -> List[Dict[str, dic
                 })
     return chunks
 
-def save_knowledge_base(index: faiss.IndexHNSW, metadata: List[dict], index_to_docstore_id: Dict[int, str], docstore: InMemoryDocstore) -> None:
+def save_knowledge_base(index: faiss.IndexFlatL2, metadata: List[dict], index_to_docstore_id: Dict[int, str], docstore: InMemoryDocstore) -> None:
     """Save the FAISS index, metadata, index_to_docstore_id, and docstore to disk."""
     faiss.write_index(index, INDEX_PATH)
     with open(METADATA_PATH, "w") as f:
@@ -244,7 +247,7 @@ def save_knowledge_base(index: faiss.IndexHNSW, metadata: List[dict], index_to_d
     
     logging.info("Knowledge base saved.")
 
-def load_knowledge_base() -> Tuple[faiss.IndexHNSW, List[dict], Dict[int, str], InMemoryDocstore]:
+def load_knowledge_base() -> Tuple[faiss.IndexFlatL2, List[dict], Dict[int, str], InMemoryDocstore]:
     """Load the FAISS index, metadata, index_to_docstore_id, and docstore from disk."""
     if all(os.path.exists(path) for path in [INDEX_PATH, METADATA_PATH, INDEX_TO_DOCSTORE_ID_PATH, DOCSTORE_PATH]):
         index = faiss.read_index(INDEX_PATH)
@@ -263,7 +266,7 @@ def load_knowledge_base() -> Tuple[faiss.IndexHNSW, List[dict], Dict[int, str], 
         return index, metadata, index_to_docstore_id, docstore
     else:
         # Initialize a new knowledge base if no files are found
-        index = faiss.IndexHNSW(embedding_dim)
+        index = faiss.IndexFlatL2(embedding_dim)
         metadata = []
         index_to_docstore_id = {}
         docstore = InMemoryDocstore({})
@@ -272,12 +275,12 @@ def load_knowledge_base() -> Tuple[faiss.IndexHNSW, List[dict], Dict[int, str], 
 
 def update_knowledge_base(
     chunks: List[Dict[str, dict | str]], 
-    index: faiss.IndexHNSW, 
+    index: faiss.IndexFlatL2, 
     metadata: List[dict], 
     index_to_docstore_id: Dict[int, str],
     docstore: InMemoryDocstore, 
     video_details: list    
-) -> Tuple[faiss.IndexHNSW, list, dict, InMemoryDocstore]:
+) -> Tuple[faiss.IndexFlatL2, list, dict, InMemoryDocstore]:
     """Update the FAISS index with new data."""
     # Extract existing video IDs from metadata
     existing_ids = {entry["metadata"]["video_id"] for entry in metadata}
@@ -297,7 +300,7 @@ def update_knowledge_base(
         # Initialize the FAISS index if it's empty
         if index.ntotal == 0:
             embedding_dim = embeddings.shape[1]  # Get dimensionality from embeddings
-            index = faiss.IndexHNSW(embedding_dim)
+            index = faiss.IndexFlatL2(embedding_dim)
             logging.info(f"Initialized FAISS index with dimensionality: {embedding_dim}")
 
         # Add new embeddings to FAISS index
@@ -341,7 +344,7 @@ def update_knowledge_base(
 
     return index, metadata, index_to_docstore_id, docstore
 
-def query_and_analyze_knowledge_base(index: faiss.IndexHNSW, metadata: List[dict], query: str, channel_handle: str) -> str:
+def query_and_analyze_knowledge_base(index: faiss.IndexFlatL2, metadata: List[dict], query: str, channel_handle: str) -> str:
     """Query the knowledge base and analyze the results, filtering by channel handle."""
     try:
         # Filter metadata to only include entries from the specified channel handle
@@ -391,7 +394,7 @@ def query_and_analyze_knowledge_base(index: faiss.IndexHNSW, metadata: List[dict
         logging.info(f"Query: {query}")
         
         # Perform similarity search to retrieve the top-k most similar documents
-        retrieved_docs = vectorstore.similarity_search(query, k=5) # k specifies the number of results to return
+        retrieved_docs = vectorstore.similarity_search(query, k=3) # k specifies the number of results to return
         context_with_links = []
 
         for doc in retrieved_docs:
